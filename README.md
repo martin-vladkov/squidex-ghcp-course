@@ -129,6 +129,10 @@ Copy this snippet into your PR body, replacing the placeholders:
 
 Please create issues to report bugs, suggest new functionalities, ask questions or just share your thoughts about the project. We will really appreciate your contribution, thanks.
 
+For the **GHCP Walk track** — plan-first workflow, PR expectations, branching strategy, and Copilot usage guidelines — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+New to the Walk track? Paste [docs/onboarding-walk.md](docs/onboarding-walk.md) into Copilot Chat to get oriented in one step.
+
 ## Cloud Version
 
 Although Squidex is free it is also available as a Saas version on [https://cloud.squidex.io](https://cloud.squidex.io).
