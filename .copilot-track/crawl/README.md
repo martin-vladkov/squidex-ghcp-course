@@ -139,12 +139,17 @@ Each `lesson-NN.md` file should contain:
 - What changed and why
 - Files/paths touched
 
+## Review focus
+- **Critical files:** list the 1–3 files a reviewer must look at closely
+- **Check that:** specific things to verify (logic, edge cases, naming)
+- **Not in scope:** what was deliberately left out
+
 ## Evidence
 - Tests/logs/metrics:
   ```
   <command and output summary>
   ```
-- Prompt log: `.copilot-track/crawl/lesson-<N>.md`
+- Prompt used with Copilot: (paraphrase or quote)
 
 ## Risk & Rollback
 - Risk: low / medium / high
