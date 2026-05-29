@@ -30,7 +30,8 @@ jobs:
           dotnet test \
             backend/tests/Squidex.Domain.Apps.Core.Tests/Squidex.Domain.Apps.Core.Tests.csproj \
             --filter "FullyQualifiedName~LanguagesConfigTests" \
-            --logger "console;verbosity=normal"
+            --logger "console;verbosity=normal" \
+            -warnaserror
 
       - name: Test — Entities (AppDomainObjectTests)
         run: |
