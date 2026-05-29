@@ -5,6 +5,7 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Squidex.Domain.Apps.Core;
@@ -422,6 +423,45 @@ public class AppDomainObjectTests : HandlerTestBase<App>
         var actual = await PublishAsync(sut, command);
 
         await VerifySutAsync(actual);
+    }
+
+    [Fact]
+    public async Task AddLanguage_should_not_log_when_toggle_is_off()
+    {
+        var offConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Features:LogLanguageOps"] = "false",
+            })
+            .Build();
+
+        var offServiceProvider =
+            new ServiceCollection()
+                .AddSingleton(AppProvider)
+                .AddSingleton(billingManager)
+                .AddSingleton(billingPlans)
+                .AddSingleton(initialSettings)
+                .AddSingleton(usageGate)
+                .AddSingleton(userResolver)
+                .AddSingleton<IConfiguration>(offConfig)
+                .BuildServiceProvider();
+
+        var offLog = A.Fake<ILogger<AppDomainObject>>();
+
+#pragma warning disable MA0056
+        var offSut = new AppDomainObject(Id, PersistenceFactory, offLog, offServiceProvider);
+#pragma warning restore MA0056
+
+        // Initialize offSut's in-memory state (fake persistence has no stored events)
+        await PublishAsync(offSut, new CreateApp { Name = AppId.Name, AppId = AppId.Id });
+        await PublishAsync(offSut, new AddLanguage { Language = Language.DE });
+
+        A.CallTo(offLog)
+            .Where(call =>
+                call.Method.Name == "Log" &&
+                call.Arguments.Get<LogLevel>(0) == LogLevel.Information &&
+                call.Arguments[2]!.ToString()!.Contains("AddLanguage"))
+            .MustNotHaveHappened();
     }
 
     [Fact]
