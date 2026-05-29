@@ -121,14 +121,15 @@ public sealed class LanguagesConfig : IFieldPartitioning
 
         var masterConfig = newLanguages[newMaster];
 
-        if (masterConfig.IsOptional || masterConfig.Fallbacks.Any())
+        if (masterConfig.IsOptional || masterConfig.Fallbacks.Count > 0)
         {
             newLanguages[newMaster] = LanguageConfig.Default;
         }
 
-        foreach (var (key, config) in newLanguages.ToList())
+        // ToArray of keys avoids allocating KeyValuePair entries — smaller array, same safety.
+        foreach (var key in newLanguages.Keys.ToArray())
         {
-            newLanguages[key] = config.Cleanup(key, newLanguages);
+            newLanguages[key] = newLanguages[key].Cleanup(key, newLanguages);
         }
     }
 

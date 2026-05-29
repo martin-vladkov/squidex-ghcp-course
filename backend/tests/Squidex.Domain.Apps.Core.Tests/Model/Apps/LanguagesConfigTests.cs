@@ -332,4 +332,44 @@ public class LanguagesConfigTests(ITestOutputHelper output)
         output.WriteLine($"  Total  : {sw.Elapsed.TotalMilliseconds:F1} ms");
         output.WriteLine($"  Per op : {nsPerOp:F0} ns");
     }
+
+    /// <summary>
+    /// Perf baseline for Set (triggers Cleanup on every call) — measures allocation hot-spot
+    /// before and after the Walk Ex6 micro-optimisation (Any→Count, ToList→Keys.ToArray).
+    /// Run with: dotnet test --filter "Category=Perf"
+    /// Results are captured in ai-track-docs/perf-baseline.md.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void Perf_Set_Cleanup_baseline()
+    {
+        const int Iterations = 50_000;
+
+        // Build a config with 3 languages and fallbacks so Cleanup visits all paths.
+        var seed =
+            LanguagesConfig.English
+                .Set(Language.DE, isOptional: true, Language.EN)
+                .Set(Language.IT, isOptional: true, Language.DE);
+
+        // warm-up
+        for (var i = 0; i < 1_000; i++)
+        {
+            _ = seed.Set(Language.FR);
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        for (var i = 0; i < Iterations; i++)
+        {
+            // Set always calls Build → Cleanup internally.
+            _ = seed.Set(Language.FR);
+        }
+
+        sw.Stop();
+
+        var nsPerOp = sw.Elapsed.TotalMilliseconds * 1_000_000 / Iterations;
+        output.WriteLine($"Set+Cleanup — {Iterations:N0} iterations");
+        output.WriteLine($"  Total  : {sw.Elapsed.TotalMilliseconds:F1} ms");
+        output.WriteLine($"  Per op : {nsPerOp:F0} ns");
+    }
 }
