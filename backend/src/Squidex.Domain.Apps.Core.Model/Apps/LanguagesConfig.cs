@@ -42,6 +42,7 @@ public sealed class LanguagesConfig : IFieldPartitioning
     {
         Guard.NotNull(values);
         Guard.NotNullOrEmpty(master);
+        Guard.NotEmpty<KeyValuePair<string, LanguageConfig>>(values);
 
         Cleanup(values, ref master);
 
