@@ -36,5 +36,27 @@ launchSettings.json
 /frontend/app-config/localhost-key.pem
 /frontend/app-config/localhost.pem
 
+# Private keys & certificates (never commit private key material)
+# The dev/*.pfx is intentionally tracked (needed by install-cert.ps1) but is
+# protected only by a known dev password — treat as low-privilege localhost only.
+dev/*.key
+dev/*.p12
+*.key
+*.p12
+
+# Environment / secret files
+.env
+.env.*
+*.env
+!*.env.example
+secrets.json
+**/secrets.json
+**/*secrets*.json
+!**/*.example.json
+
+# C# user secrets override (appsettings already covered above)
+appsettings.*.json
+!appsettings.json
+
 # C# language server cache
 *.lscache
