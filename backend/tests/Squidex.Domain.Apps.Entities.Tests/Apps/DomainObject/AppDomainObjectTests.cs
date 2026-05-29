@@ -24,6 +24,7 @@ public class AppDomainObjectTests : HandlerTestBase<App>
 {
     private readonly IBillingPlans billingPlans = A.Fake<IBillingPlans>();
     private readonly IBillingManager billingManager = A.Fake<IBillingManager>();
+    private readonly ILogger<AppDomainObject> log = A.Fake<ILogger<AppDomainObject>>();
     private readonly IUser user;
     private readonly IUserResolver userResolver = A.Fake<IUserResolver>();
     private readonly IUsageGate usageGate = A.Fake<IUsageGate>();
@@ -84,8 +85,6 @@ public class AppDomainObjectTests : HandlerTestBase<App>
                 .AddSingleton(usageGate)
                 .AddSingleton(userResolver)
                 .BuildServiceProvider();
-
-        var log = A.Fake<ILogger<AppDomainObject>>();
 
 #pragma warning disable MA0056 // Do not call overridable members in constructor
         sut = new AppDomainObject(Id, PersistenceFactory, log, serviceProvider);
@@ -423,6 +422,22 @@ public class AppDomainObjectTests : HandlerTestBase<App>
         var actual = await PublishAsync(sut, command);
 
         await VerifySutAsync(actual);
+    }
+
+    [Fact]
+    public async Task AddLanguage_should_log_structured_operation()
+    {
+        var command = new AddLanguage { Language = Language.DE };
+
+        await ExecuteCreateAsync();
+        await PublishAsync(sut, command);
+
+        A.CallTo(log)
+            .Where(call =>
+                call.Method.Name == "Log" &&
+                call.Arguments.Get<LogLevel>(0) == LogLevel.Information &&
+                call.Arguments[2]!.ToString()!.Contains("AddLanguage"))
+            .MustHaveHappenedOnceOrMore();
     }
 
     [Fact]
