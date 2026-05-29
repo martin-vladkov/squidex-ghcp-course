@@ -14,7 +14,7 @@ using Squidex.Infrastructure.Collections;
 
 namespace Squidex.Domain.Apps.Core.Model.Apps;
 
-public class LanguagesConfigTests
+public class LanguagesConfigTests(ITestOutputHelper output)
 {
     private readonly LanguagesConfig config_0 = LanguagesConfig.English;
 
@@ -294,5 +294,42 @@ public class LanguagesConfigTests
     {
         Assert.Throws<ArgumentException>(() =>
             new LanguagesConfig(new Dictionary<string, LanguageConfig>(), "en"));
+    }
+
+    /// <summary>
+    /// Perf baseline for GetPriorities — measure only, no timing assertion.
+    /// Run with: dotnet test --filter "Category=Perf"
+    /// Results are captured in ai-track-docs/perf-baseline.md.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Perf")]
+    public void Perf_GetPriorities_baseline()
+    {
+        const int Iterations = 100_000;
+
+        var config =
+            LanguagesConfig.English
+                .Set(Language.DE)
+                .Set(Language.IT, isOptional: true, Language.DE);
+
+        // warm-up
+        for (var i = 0; i < 1_000; i++)
+        {
+            _ = config.GetPriorities(Language.IT).ToList();
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        for (var i = 0; i < Iterations; i++)
+        {
+            _ = config.GetPriorities(Language.IT).ToList();
+        }
+
+        sw.Stop();
+
+        var nsPerOp = sw.Elapsed.TotalMilliseconds * 1_000_000 / Iterations;
+        output.WriteLine($"GetPriorities — {Iterations:N0} iterations");
+        output.WriteLine($"  Total  : {sw.Elapsed.TotalMilliseconds:F1} ms");
+        output.WriteLine($"  Per op : {nsPerOp:F0} ns");
     }
 }
