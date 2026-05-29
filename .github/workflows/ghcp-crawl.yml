@@ -1,0 +1,40 @@
+name: GHCP Crawl — Unit Tests
+
+on:
+  push:
+    branches:
+      - 'exercise-*'
+  pull_request:
+    branches:
+      - 'exercise-*'
+
+jobs:
+  unit-tests:
+    name: Unit Tests (.NET ${{ matrix.dotnet }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet: ['10.0.x']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4.3.1
+        with:
+          dotnet-version: ${{ matrix.dotnet }}
+
+      - name: Test — Core.Model (LanguagesConfigTests)
+        run: |
+          dotnet test \
+            backend/tests/Squidex.Domain.Apps.Core.Tests/Squidex.Domain.Apps.Core.Tests.csproj \
+            --filter "FullyQualifiedName~LanguagesConfigTests" \
+            --logger "console;verbosity=normal"
+
+      - name: Test — Entities (AppDomainObjectTests)
+        run: |
+          dotnet test \
+            backend/tests/Squidex.Domain.Apps.Entities.Tests/Squidex.Domain.Apps.Entities.Tests.csproj \
+            --filter "FullyQualifiedName~AppDomainObjectTests" \
+            --logger "console;verbosity=normal"
