@@ -411,8 +411,10 @@ public partial class AppDomainObject(
         var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageUpdated());
         if (logLanguageOps)
+        {
             log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
                 "UpdateLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
+        }
     }
 
     private void AssignContributor(AssignContributor command, bool isAdded)
@@ -455,8 +457,10 @@ public partial class AppDomainObject(
         var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageAdded());
         if (logLanguageOps)
+        {
             log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
                 "AddLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
+        }
     }
 
     private void RemoveLanguage(RemoveLanguage command)
@@ -464,8 +468,10 @@ public partial class AppDomainObject(
         var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageRemoved());
         if (logLanguageOps)
+        {
             log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
                 "RemoveLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
+        }
     }
 
     private void AddRole(AddRole command)
