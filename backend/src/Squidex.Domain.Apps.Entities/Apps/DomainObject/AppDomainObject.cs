@@ -6,6 +6,7 @@
 // ==========================================================================
 
 using System.Diagnostics;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Squidex.Domain.Apps.Core.Apps;
@@ -32,6 +33,11 @@ public partial class AppDomainObject(
     IServiceProvider serviceProvider)
     : DomainObject<App>(id, persistence, log)
 {
+    // Feature toggle: set Features:LogLanguageOps=false in configuration to silence
+    // language-op log entries without redeploying. Defaults to true (logging on).
+    private readonly bool logLanguageOps =
+        serviceProvider.GetService<IConfiguration>()
+            ?.GetValue<bool>("Features:LogLanguageOps", defaultValue: true) ?? true;
     protected override bool IsDeleted(App snapshot)
     {
         return snapshot.IsDeleted;
@@ -404,8 +410,9 @@ public partial class AppDomainObject(
     {
         var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageUpdated());
-        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
-            "UpdateLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
+        if (logLanguageOps)
+            log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+                "UpdateLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
     }
 
     private void AssignContributor(AssignContributor command, bool isAdded)
@@ -447,16 +454,18 @@ public partial class AppDomainObject(
     {
         var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageAdded());
-        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
-            "AddLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
+        if (logLanguageOps)
+            log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+                "AddLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
     }
 
     private void RemoveLanguage(RemoveLanguage command)
     {
         var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageRemoved());
-        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
-            "RemoveLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
+        if (logLanguageOps)
+            log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+                "RemoveLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
     }
 
     private void AddRole(AddRole command)

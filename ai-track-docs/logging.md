@@ -117,3 +117,35 @@ private void <Operation>(<Command> command)
 ```
 
 **Do not log sensitive data** (PII, token values, connection strings) — see [security-hygiene.md](security-hygiene.md).
+
+---
+
+## Toggle — `Features:LogLanguageOps`
+
+Language-op logging can be silenced without redeploying by setting a configuration key:
+
+| Key | Type | Default | Effect |
+|-----|------|---------|--------|
+| `Features:LogLanguageOps` | `bool` | `true` | `false` suppresses the three `LogInformation` calls in `AddLanguage`, `RemoveLanguage`, `UpdateLanguage` |
+
+### How to disable (example `appsettings.Development.json`)
+
+```json
+{
+  "Features": {
+    "LogLanguageOps": false
+  }
+}
+```
+
+### How it works
+
+`AppDomainObject` reads the key once at construction time via `IConfiguration.GetValue<bool>`:
+
+```csharp
+private readonly bool logLanguageOps =
+    serviceProvider.GetService<IConfiguration>()
+        ?.GetValue<bool>("Features:LogLanguageOps", defaultValue: true) ?? true;
+```
+
+`IConfiguration` is resolved as an **optional** service — if it is not registered (e.g. in unit tests), the field defaults to `true` and existing tests are unaffected.
