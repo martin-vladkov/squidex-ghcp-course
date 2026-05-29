@@ -426,6 +426,85 @@ public class AppDomainObjectTests : HandlerTestBase<App>
     }
 
     [Fact]
+    public async Task AddLanguage_should_fail_open_when_config_throws()
+    {
+        // Simulate a config service that throws during toggle resolution.
+        var throwingConfig = A.Fake<IConfiguration>();
+        A.CallTo(() => throwingConfig.GetSection(A<string>._))
+            .Throws<InvalidOperationException>();
+
+        var throwingServiceProvider =
+            new ServiceCollection()
+                .AddSingleton(AppProvider)
+                .AddSingleton(billingManager)
+                .AddSingleton(billingPlans)
+                .AddSingleton(initialSettings)
+                .AddSingleton(usageGate)
+                .AddSingleton(userResolver)
+                .AddSingleton<IConfiguration>(throwingConfig)
+                .BuildServiceProvider();
+
+        var resilientLog = A.Fake<ILogger<AppDomainObject>>();
+
+#pragma warning disable MA0056
+        // Construction must succeed even when IConfiguration throws.
+        var resilientSut = new AppDomainObject(Id, PersistenceFactory, resilientLog, throwingServiceProvider);
+#pragma warning restore MA0056
+
+        await PublishAsync(resilientSut, new CreateApp { Name = AppId.Name, AppId = AppId.Id });
+        await PublishAsync(resilientSut, new AddLanguage { Language = Language.DE });
+
+        // Fail-open: exception during toggle resolution defaults to true, so log IS emitted.
+        A.CallTo(resilientLog)
+            .Where(call =>
+                call.Method.Name == "Log" &&
+                call.Arguments.Get<LogLevel>(0) == LogLevel.Information &&
+                call.Arguments[2]!.ToString()!.Contains("AddLanguage"))
+            .MustHaveHappenedOnceOrMore();
+    }
+
+    [Fact]
+    public async Task AddLanguage_should_fail_open_when_toggle_value_is_malformed()
+    {
+        // Simulate a malformed config value that cannot be parsed as bool.
+        var malformedConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Features:LogLanguageOps"] = "not-a-bool",
+            })
+            .Build();
+
+        var malformedServiceProvider =
+            new ServiceCollection()
+                .AddSingleton(AppProvider)
+                .AddSingleton(billingManager)
+                .AddSingleton(billingPlans)
+                .AddSingleton(initialSettings)
+                .AddSingleton(usageGate)
+                .AddSingleton(userResolver)
+                .AddSingleton<IConfiguration>(malformedConfig)
+                .BuildServiceProvider();
+
+        var malformedLog = A.Fake<ILogger<AppDomainObject>>();
+
+#pragma warning disable MA0056
+        // Construction must succeed even with an unparseable toggle value.
+        var malformedSut = new AppDomainObject(Id, PersistenceFactory, malformedLog, malformedServiceProvider);
+#pragma warning restore MA0056
+
+        await PublishAsync(malformedSut, new CreateApp { Name = AppId.Name, AppId = AppId.Id });
+        await PublishAsync(malformedSut, new AddLanguage { Language = Language.DE });
+
+        // Fail-open: malformed value defaults to true, so log IS emitted.
+        A.CallTo(malformedLog)
+            .Where(call =>
+                call.Method.Name == "Log" &&
+                call.Arguments.Get<LogLevel>(0) == LogLevel.Information &&
+                call.Arguments[2]!.ToString()!.Contains("AddLanguage"))
+            .MustHaveHappenedOnceOrMore();
+    }
+
+    [Fact]
     public async Task AddLanguage_should_not_log_when_toggle_is_off()
     {
         var offConfig = new ConfigurationBuilder()

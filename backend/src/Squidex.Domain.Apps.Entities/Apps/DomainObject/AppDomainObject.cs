@@ -35,9 +35,24 @@ public partial class AppDomainObject(
 {
     // Feature toggle: set Features:LogLanguageOps=false in configuration to silence
     // language-op log entries without redeploying. Defaults to true (logging on).
-    private readonly bool logLanguageOps =
-        serviceProvider.GetService<IConfiguration>()
-            ?.GetValue<bool>("Features:LogLanguageOps", defaultValue: true) ?? true;
+    // Fail-open: a malformed or unavailable config value never crashes construction.
+    private readonly bool logLanguageOps = ResolveLogLanguageOps(serviceProvider);
+
+    private static bool ResolveLogLanguageOps(IServiceProvider serviceProvider)
+    {
+        try
+        {
+            return serviceProvider.GetService<IConfiguration>()
+                ?.GetValue<bool>("Features:LogLanguageOps", defaultValue: true) ?? true;
+        }
+        catch (Exception)
+        {
+            // Config value is malformed or config service threw during resolution.
+            // Default to enabled (fail-open) so a bad config never blocks language ops.
+            return true;
+        }
+    }
+
     protected override bool IsDeleted(App snapshot)
     {
         return snapshot.IsDeleted;

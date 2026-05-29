@@ -140,12 +140,24 @@ Language-op logging can be silenced without redeploying by setting a configurati
 
 ### How it works
 
-`AppDomainObject` reads the key once at construction time via `IConfiguration.GetValue<bool>`:
+`AppDomainObject` reads the key once at construction time via a resilient static helper:
 
 ```csharp
-private readonly bool logLanguageOps =
-    serviceProvider.GetService<IConfiguration>()
-        ?.GetValue<bool>("Features:LogLanguageOps", defaultValue: true) ?? true;
+private readonly bool logLanguageOps = ResolveLogLanguageOps(serviceProvider);
+
+private static bool ResolveLogLanguageOps(IServiceProvider serviceProvider)
+{
+    try
+    {
+        return serviceProvider.GetService<IConfiguration>()
+            ?.GetValue<bool>("Features:LogLanguageOps", defaultValue: true) ?? true;
+    }
+    catch (Exception)
+    {
+        // Config value is malformed or config service threw — fail-open.
+        return true;
+    }
+}
 ```
 
-`IConfiguration` is resolved as an **optional** service — if it is not registered (e.g. in unit tests), the field defaults to `true` and existing tests are unaffected.
+**Fail-open design:** if `IConfiguration` is unavailable or the value is unparseable (e.g. `"yes"` instead of `"true"`), construction never throws and language ops continue normally with logging enabled. A bad config value silences nothing and breaks nothing.
