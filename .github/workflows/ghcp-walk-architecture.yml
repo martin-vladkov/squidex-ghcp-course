@@ -1,0 +1,46 @@
+name: GHCP Walk — Architecture Diagram Validation
+
+on:
+  push:
+    branches:
+      - 'walk-*'
+  pull_request:
+    branches:
+      - 'walk-*'
+
+jobs:
+  validate-diagram:
+    name: Validate architecture diagram (Mermaid)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Mermaid CLI
+        run: npm install -g @mermaid-js/mermaid-cli@latest
+
+      - name: Extract Mermaid block from architecture.md
+        run: |
+          # Pull the fenced ```mermaid block out of docs/architecture.md
+          awk '/^```mermaid/{flag=1; next} /^```/{if(flag) exit} flag' \
+            docs/architecture.md > /tmp/diagram.mmd
+          echo "--- extracted diagram ---"
+          cat /tmp/diagram.mmd
+
+      - name: Render diagram (validate syntax)
+        run: |
+          mmdc -i /tmp/diagram.mmd -o /tmp/diagram.svg --puppeteerConfigFile <(echo '{"args":["--no-sandbox"]}')
+          echo "Diagram rendered successfully: $(du -k /tmp/diagram.svg | cut -f1) KB"
+
+      - name: Upload rendered diagram as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-diagram
+          path: /tmp/diagram.svg
+          retention-days: 7
