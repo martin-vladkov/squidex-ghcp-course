@@ -302,7 +302,9 @@ public partial class AppDomainObject(
             case DeleteApp delete:
                 return ApplyAsync(delete, async (c, ct) =>
                 {
+#pragma warning disable MA0040 // Billing: unsubscribe must finish even if the delete request is cancelled — passing CancellationToken.None is intentional.
                     await BillingManager.UnsubscribeAsync(c.Actor.Identifier, Snapshot, default);
+#pragma warning restore MA0040
 
                     DeleteApp(c);
                 }, ct);
@@ -316,7 +318,9 @@ public partial class AppDomainObject(
                     {
                         if (!c.FromCallback)
                         {
-                            await BillingManager.UnsubscribeAsync(c.Actor.Identifier, Snapshot, default);
+#pragma warning disable MA0040 // Billing: unsubscribe during plan reset must finish even if the caller cancels — passing CancellationToken.None is intentional.
+                                await BillingManager.UnsubscribeAsync(c.Actor.Identifier, Snapshot, default);
+#pragma warning restore MA0040
                         }
 
                         ResetPlan(c);
@@ -334,7 +338,9 @@ public partial class AppDomainObject(
                                 return new PlanChangedResult(c.PlanId, false, redirectUri);
                             }
 
+#pragma warning disable MA0040 // Billing: subscribe must complete even if the caller cancels — passing CancellationToken.None is intentional.
                             await BillingManager.SubscribeAsync(c.Actor.Identifier, Snapshot, changePlan.PlanId, default);
+#pragma warning restore MA0040
                         }
 
                         ChangePlan(c);
