@@ -1,0 +1,37 @@
+name: Walk – Secret Scanning (gitleaks)
+
+# Runs on every push / PR targeting a walk-* branch to detect accidental
+# credential commits.  All findings are false-positives triaged in
+# .gitleaks.toml; any new finding must either be rotated or documented there
+# before the scan can pass.
+
+on:
+  push:
+    branches:
+      - walk-**
+  pull_request:
+    branches:
+      - walk-**
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Scan for secrets (gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so gitleaks can scan git log too
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Use our project-level config — allowlist entries are documented
+          # in .gitleaks.toml with per-entry justification comments.
+          config-path: .gitleaks.toml
