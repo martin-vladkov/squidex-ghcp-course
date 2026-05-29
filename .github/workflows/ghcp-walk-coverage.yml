@@ -1,0 +1,87 @@
+name: Walk – Coverage Summary (soft gate)
+
+# Posts a Markdown coverage summary to the GitHub Actions job summary on every
+# push / PR targeting a walk-* branch.  The summary is ADVISORY ONLY:
+#   - The test step uses  continue-on-error: true
+#   - The report step uses continue-on-error: true
+#   - No --fail-below-threshold flag is passed anywhere
+# A failing coverage result will show a warning in the Actions UI but will
+# never block merging the PR.
+#
+# To view the summary:
+#   Pull Request → Checks tab → "Coverage Summary (advisory)" job → Summary tab
+#
+# To view the full drill-down report:
+#   Pull Request → Checks tab → "Coverage Summary (advisory)" job →
+#   Artifacts → coverage-report → index.html
+
+on:
+  push:
+    branches:
+      - walk-**
+  pull_request:
+    branches:
+      - walk-**
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-summary:
+    name: Coverage summary (advisory)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Restore once so subsequent steps can use --no-restore.
+      - name: Restore NuGet packages
+        run: dotnet restore backend/Squidex.slnx
+
+      # Run the two Walk-scope test projects with coverage collection.
+      # continue-on-error: true — a test failure shows a warning, not a red
+      # gate.  Coverage XML is written to coverage-out/**/*.cobertura.xml.
+      # tests.sln includes all backend test projects; the --filter restricts
+      # execution to the two Walk-scope suites (Core + Entities).
+      - name: Run tests with coverage
+        continue-on-error: true
+        run: |
+          dotnet test backend/tests/tests.sln \
+            --filter "FullyQualifiedName~LanguagesConfigTests|FullyQualifiedName~AppDomainObjectTests" \
+            --collect:"XPlat Code Coverage" \
+            --settings backend/tests/coverlet.runsettings.xml \
+            --results-directory coverage-out \
+            --no-restore \
+            --logger "console;verbosity=minimal"
+
+      # Convert Cobertura XML → Markdown and post directly to the job summary.
+      # continue-on-error: true — a report failure never blocks the PR.
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool
+
+      - name: Generate Markdown job summary
+        continue-on-error: true
+        run: |
+          reportgenerator \
+            -reports:"coverage-out/**/coverage.cobertura.xml" \
+            -targetdir:coverage-report \
+            -reporttypes:"MarkdownSummaryGithub;Html" \
+            -title:"Walk Exercise Coverage"
+          # Post Markdown to the Actions job summary (visible in the Summary tab)
+          cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> **Soft gate** — this summary is advisory only and does not block merges." \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload full coverage report (HTML drill-down)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report/
+          retention-days: 14
