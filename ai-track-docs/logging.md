@@ -106,15 +106,26 @@ Op IN ["AddLanguage","RemoveLanguage","UpdateLanguage"] | stats avg(ElapsedMs)
 When adding structured logs to new domain object operations, follow this template:
 
 ```csharp
+// 1. Call the shared helper from each operation method:
 private void <Operation>(<Command> command)
 {
-    var sw = Stopwatch.StartNew();
+    var sw = ValueStopwatch.StartNew();   // allocation-free; already used across Squidex.Infrastructure
     Raise(command, new <Event>());
-    log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs}",
-        "<OperationName>", "ok", sw.ElapsedMilliseconds);
-    // Add domain-specific fields after elapsed_ms as needed
+    LogLanguageOp("<OperationName>", command.Language, sw.Stop());
+}
+
+// 2. The shared helper centralises the guard + message template:
+private void LogLanguageOp(string op, Language language, long elapsedMs)
+{
+    if (logLanguageOps)
+    {
+        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+            op, "ok", elapsedMs, language);
+    }
 }
 ```
+
+> **Why `ValueStopwatch` instead of `System.Diagnostics.Stopwatch`?** `ValueStopwatch` is a `readonly struct` — no heap allocation. It is the timing primitive already used everywhere else in `Squidex.Infrastructure` (e.g. `LogCommandMiddleware`, `RequestLogPerformanceMiddleware`). Add domain-specific fields after `language=` as needed.
 
 **Do not log sensitive data** (PII, token values, connection strings) — see [security-hygiene.md](security-hygiene.md).
 
@@ -143,6 +154,7 @@ Language-op logging can be silenced without redeploying by setting a configurati
 `AppDomainObject` reads the key once at construction time via a resilient static helper:
 
 ```csharp
+// Toggle resolved once at construction (fail-open):
 private readonly bool logLanguageOps = ResolveLogLanguageOps(serviceProvider);
 
 private static bool ResolveLogLanguageOps(IServiceProvider serviceProvider)
@@ -156,6 +168,16 @@ private static bool ResolveLogLanguageOps(IServiceProvider serviceProvider)
     {
         // Config value is malformed or config service threw — fail-open.
         return true;
+    }
+}
+
+// Shared logging helper (Walk Ex3 refactor — replaces 3×8-line duplicated blocks):
+private void LogLanguageOp(string op, Language language, long elapsedMs)
+{
+    if (logLanguageOps)
+    {
+        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+            op, "ok", elapsedMs, language);
     }
 }
 ```
