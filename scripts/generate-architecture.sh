@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# scripts/generate-architecture.sh
+#
+# Generates a Mermaid dependency graph from <ProjectReference> entries in every
+# *.csproj under backend/src/ and backend/extensions/, then updates the
+# auto-generated section of docs/architecture.md (between the DIAGRAM-AUTO markers).
+#
+# USAGE
+#   ./scripts/generate-architecture.sh          # update docs/architecture.md
+#   ./scripts/generate-architecture.sh --check  # exit 1 if diagram is stale
+#
+# TUNING
+#   Subgraph assignments  →  edit the get_group() function below.
+#   Display labels        →  edit the get_label() function below.
+#   Retry the layout      →  change 'graph TD' to 'graph LR' for left-to-right.
+#
+# ROLLBACK
+#   git checkout docs/architecture.md   # restore the last committed diagram
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+ARCH_DOC="$REPO_ROOT/docs/architecture.md"
+CHECK_MODE=false
+
+if [[ "${1:-}" == "--check" ]]; then
+    CHECK_MODE=true
+fi
+
+# ---------------------------------------------------------------------------
+# Helpers — edit to customise output
+# ---------------------------------------------------------------------------
+
+# Convert project name → valid Mermaid node ID (no dots allowed in IDs)
+get_id() { local n="$1"; echo "${n//./_}"; }
+
+# Convert project name → human-readable label shown inside the node
+get_label() {
+    local n="$1"
+    n="${n#Squidex.Domain.Apps.}"   # strip verbose domain prefix
+    n="${n#Squidex.}"                # strip common Squidex. prefix
+    [[ "$n" == "Squidex" ]] && n="Host (entry point)"
+    echo "$n"
+}
+
+# Assign project to a display subgraph
+get_group() {
+    local n="$1"
+    case "$n" in
+        Squidex|Squidex.Web)                       echo "HOST"        ;;
+        Squidex.Domain.*)                           echo "DOMAIN"      ;;
+        Squidex.Infrastructure|Squidex.Shared)      echo "INFRA"       ;;
+        *)                                          echo "PERSISTENCE" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Collect projects and inter-project edges
+# ---------------------------------------------------------------------------
+
+PROJECTS_FILE=$(mktemp)
+EDGES_FILE=$(mktemp)
+trap 'rm -f "$PROJECTS_FILE" "$EDGES_FILE"' EXIT
+
+while IFS= read -r csproj; do
+    name=$(basename "$csproj" .csproj)
+    echo "$name" >> "$PROJECTS_FILE"
+
+    if grep -qi '<ProjectReference' "$csproj" 2>/dev/null; then
+        grep -i '<ProjectReference' "$csproj" \
+            | grep -o 'Include="[^"]*"' \
+            | sed 's/Include="//;s/"//' \
+            | sed 's|\\|/|g' \
+            | while IFS= read -r p; do
+                  ref=$(basename "$p" .csproj)
+                  echo "$name|$ref"
+              done >> "$EDGES_FILE"
+    fi
+done < <(find "$REPO_ROOT/backend/src" "$REPO_ROOT/backend/extensions" -name "*.csproj" | sort)
+
+# ---------------------------------------------------------------------------
+# Generate Mermaid block
+# ---------------------------------------------------------------------------
+
+GENERATED_FILE=$(mktemp)
+trap 'rm -f "$PROJECTS_FILE" "$EDGES_FILE" "$GENERATED_FILE"' EXIT
+
+{
+    echo '```mermaid'
+    echo 'graph TD'
+
+    # Emit subgraphs in render order (HOST at top, INFRA at bottom)
+    for group in HOST DOMAIN PERSISTENCE INFRA; do
+        case "$group" in
+            HOST)        group_label="Host / API" ;;
+            DOMAIN)      group_label="Domain" ;;
+            INFRA)       group_label="Infrastructure" ;;
+            PERSISTENCE) group_label="Persistence & Extensions" ;;
+        esac
+
+        echo "    subgraph ${group}[\"${group_label}\"]"
+        while IFS= read -r name; do
+            [[ "$(get_group "$name")" == "$group" ]] || continue
+            echo "        $(get_id "$name")[\"$(get_label "$name")\"]"
+        done < "$PROJECTS_FILE"
+        echo "    end"
+    done
+
+    echo "    %% edges — auto-generated from <ProjectReference> entries in *.csproj"
+    while IFS='|' read -r from to; do
+        echo "    $(get_id "$from") --> $(get_id "$to")"
+    done < "$EDGES_FILE"
+
+    echo '```'
+} > "$GENERATED_FILE"
+
+# ---------------------------------------------------------------------------
+# Replace content between markers in docs/architecture.md
+# ---------------------------------------------------------------------------
+
+MARKER_START="<!-- DIAGRAM-AUTO:START"
+MARKER_END="<!-- DIAGRAM-AUTO:END -->"
+
+if ! grep -q "$MARKER_START" "$ARCH_DOC"; then
+    echo "ERROR: markers not found in $ARCH_DOC" >&2
+    echo "Wrap the diagram section with:" >&2
+    echo "  $MARKER_START ... -->" >&2
+    echo "  $MARKER_END" >&2
+    exit 1
+fi
+
+# Build the replacement section
+REPLACEMENT_FILE=$(mktemp)
+trap 'rm -f "$PROJECTS_FILE" "$EDGES_FILE" "$GENERATED_FILE" "$REPLACEMENT_FILE"' EXIT
+
+{
+    printf '%s generated by scripts/generate-architecture.sh — do not edit by hand -->\n' "$MARKER_START"
+    cat "$GENERATED_FILE"
+    printf '%s\n' "$MARKER_END"
+} > "$REPLACEMENT_FILE"
+
+# Use Python3 (available on macOS + all Linux CI images) for portable multi-line replace
+UPDATED=$(
+    ARCH_DOC="$ARCH_DOC" \
+    REPLACEMENT_FILE="$REPLACEMENT_FILE" \
+    python3 - <<'PYEOF'
+import re, os
+
+arch_path = os.environ["ARCH_DOC"]
+repl_path = os.environ["REPLACEMENT_FILE"]
+
+with open(arch_path) as f:
+    content = f.read()
+with open(repl_path) as f:
+    replacement = f.read().rstrip("\n")
+
+updated = re.sub(
+    r"<!-- DIAGRAM-AUTO:START.*?<!-- DIAGRAM-AUTO:END -->",
+    replacement,
+    content,
+    flags=re.DOTALL,
+)
+print(updated, end="")
+PYEOF
+)
+
+# ---------------------------------------------------------------------------
+# Check or write
+# ---------------------------------------------------------------------------
+
+current=$(cat "$ARCH_DOC")
+
+if [[ "$current" == "$UPDATED" ]]; then
+    echo "✓ Architecture diagram is already up to date."
+    exit 0
+fi
+
+if [[ "$CHECK_MODE" == "true" ]]; then
+    echo "✗ Architecture diagram is stale — run: ./scripts/generate-architecture.sh" >&2
+    echo "" >&2
+    echo "=== Required changes ===" >&2
+    diff <(echo "$current") <(echo "$UPDATED") >&2 || true
+    exit 1
+fi
+
+echo "$UPDATED" > "$ARCH_DOC"
+echo "✓ docs/architecture.md updated."
+echo ""
+echo "=== Change summary (git diff) ==="
+git -C "$REPO_ROOT" diff docs/architecture.md || echo "(not a git repo or no changes tracked)"

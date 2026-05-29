@@ -1,0 +1,86 @@
+name: Run — Architecture Diagram Auto-Update Check
+
+# Runs scripts/generate-architecture.sh --check on every PR that touches a
+# *.csproj file or docs/architecture.md. Fails if the committed diagram is
+# stale (i.e., a ProjectReference was added or removed without regenerating).
+#
+# To fix a failing run, execute locally:
+#   ./scripts/generate-architecture.sh
+# then commit the updated docs/architecture.md.
+#
+# Rollback: git checkout docs/architecture.md restores the previous diagram.
+
+on:
+  push:
+    branches:
+      - run-*
+  pull_request:
+    branches:
+      - run-*
+    paths:
+      - 'backend/**/*.csproj'
+      - 'docs/architecture.md'
+      - 'scripts/generate-architecture.sh'
+
+jobs:
+  diagram-check:
+    name: Architecture diagram — staleness check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make script executable
+        run: chmod +x scripts/generate-architecture.sh
+
+      - name: Check diagram is up to date
+        run: |
+          echo "Running: scripts/generate-architecture.sh --check"
+          bash scripts/generate-architecture.sh --check
+
+      - name: Upload current diagram for review
+        if: always()
+        run: |
+          echo "## Architecture diagram (current committed state)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          # Extract Mermaid block and post to summary for quick visualisation
+          awk '/<!-- DIAGRAM-AUTO:START/{flag=1; next} /<!-- DIAGRAM-AUTO:END/{flag=0} flag' \
+            docs/architecture.md >> "$GITHUB_STEP_SUMMARY"
+
+  diagram-validate:
+    name: Architecture diagram — Mermaid syntax validation
+    runs-on: ubuntu-latest
+    needs: diagram-check
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Mermaid CLI
+        run: npm install -g @mermaid-js/mermaid-cli@latest
+
+      - name: Extract auto-generated Mermaid block
+        run: |
+          awk '/^```mermaid/{flag=1; next} /^```/{if(flag) exit} flag' \
+            docs/architecture.md > /tmp/diagram.mmd
+          echo "--- extracted diagram ---"
+          cat /tmp/diagram.mmd
+
+      - name: Render diagram (validate Mermaid syntax)
+        run: |
+          mmdc -i /tmp/diagram.mmd -o /tmp/diagram.svg \
+            --puppeteerConfigFile <(echo '{"args":["--no-sandbox"]}')
+          echo "Diagram rendered: $(du -k /tmp/diagram.svg | cut -f1) KB"
+
+      - name: Upload rendered SVG as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-diagram-svg
+          path: /tmp/diagram.svg
+          retention-days: 14
