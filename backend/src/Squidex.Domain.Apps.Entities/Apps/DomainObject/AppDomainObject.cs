@@ -5,6 +5,7 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Squidex.Domain.Apps.Core.Apps;
@@ -401,7 +402,10 @@ public partial class AppDomainObject(
 
     private void UpdateLanguage(UpdateLanguage command)
     {
+        var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageUpdated());
+        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+            "UpdateLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
     }
 
     private void AssignContributor(AssignContributor command, bool isAdded)
@@ -441,12 +445,18 @@ public partial class AppDomainObject(
 
     private void AddLanguage(AddLanguage command)
     {
+        var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageAdded());
+        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+            "AddLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
     }
 
     private void RemoveLanguage(RemoveLanguage command)
     {
+        var sw = Stopwatch.StartNew();
         Raise(command, new AppLanguageRemoved());
+        log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
+            "RemoveLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
     }
 
     private void AddRole(AddRole command)
