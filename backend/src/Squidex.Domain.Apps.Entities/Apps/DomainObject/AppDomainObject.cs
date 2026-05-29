@@ -478,6 +478,10 @@ public partial class AppDomainObject(
 
     private void LogLanguageOp(string op, Language language, long elapsedMs)
     {
+        AppMetrics.LanguageOps.Add(1,
+            new KeyValuePair<string, object?>("op", op),
+            new KeyValuePair<string, object?>("language", language.Iso2Code));
+
         if (logLanguageOps)
         {
             log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",

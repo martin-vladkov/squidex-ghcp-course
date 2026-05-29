@@ -5,6 +5,7 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -13,6 +14,7 @@ using Squidex.Domain.Apps.Core.Apps;
 using Squidex.Domain.Apps.Core.Contents;
 using Squidex.Domain.Apps.Core.TestHelpers;
 using Squidex.Domain.Apps.Entities.Apps.Commands;
+using Squidex.Domain.Apps.Entities.Apps.DomainObject;
 using Squidex.Domain.Apps.Entities.Billing;
 using Squidex.Domain.Apps.Entities.TestHelpers;
 using Squidex.Domain.Apps.Events.Apps;
@@ -582,6 +584,47 @@ public class AppDomainObjectTests : HandlerTestBase<App>
     }
 
     [Fact]
+    public async Task AddLanguage_increments_language_ops_counter()
+    {
+        // OTel metric contract test: AppMetrics.LanguageOps must record one measurement
+        // tagged op=AddLanguage, language=de when AddLanguage is executed.
+        // Uses MeterListener (BCL, no extra packages) so the test is self-contained.
+        var measurements = new List<(string Op, string Language, long Value)>();
+
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == AppMetrics.MeterName &&
+                instrument.Name == "squidex.app.language_ops")
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+        {
+            string op = string.Empty, lang = string.Empty;
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "op") { op = tag.Value?.ToString() ?? string.Empty; }
+                if (tag.Key == "language") { lang = tag.Value?.ToString() ?? string.Empty; }
+            }
+
+            measurements.Add((op, lang, value));
+        });
+
+        listener.Start();
+
+        await ExecuteCreateAsync();
+        await PublishAsync(sut, new AddLanguage { Language = Language.DE });
+
+        listener.RecordObservableInstruments();
+
+        Assert.Contains(measurements,
+            m => m.Op == "AddLanguage" && m.Language == "de" && m.Value == 1);
+    }
+
+    [Fact]
     public async Task AddLanguage_should_create_events_and_add_language()
     {
         var command = new AddLanguage { Language = Language.DE };
@@ -628,7 +671,6 @@ public class AppDomainObjectTests : HandlerTestBase<App>
     // update the assertion here, and document the change in
     // ai-track-docs/contracts.md § Updating the contract.
     // -------------------------------------------------------------------------
-
     [Fact]
     public async Task AddLanguage_event_contract_payload_has_required_fields()
     {
