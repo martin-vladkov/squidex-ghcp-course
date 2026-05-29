@@ -288,4 +288,11 @@ public class LanguagesConfigTests
         Assert.Contains((string)Language.DE, config.AllKeys);
         Assert.Contains((string)Language.IT, config.AllKeys);
     }
+
+    [Fact]
+    public void Should_throw_for_empty_language_map()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new LanguagesConfig(new Dictionary<string, LanguageConfig>(), "en"));
+    }
 }
