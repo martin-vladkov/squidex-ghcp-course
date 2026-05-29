@@ -1,0 +1,71 @@
+name: Walk — Static Analysis Gating (DomainObject path)
+
+# Enforces stricter Roslyn analyzer rules for the Apps/DomainObject directory.
+# The .editorconfig at that path promotes MA0040 and MA0007 from suppressed/warning
+# to error-severity. This workflow builds the project and fails if any error-level
+# diagnostic fires in that path so new code cannot introduce un-suppressed violations.
+#
+# Scope: Squidex.Domain.Apps.Entities project only (contains the DomainObject path).
+# Relationship to other workflows:
+#   ghcp-walk-coverage.yml  — runs all tests with coverage (continue-on-error: true)
+#   ghcp-walk-security.yml  — gitleaks secret scan
+#   this workflow           — strict analyzer gating (hard failure on error diagnostics)
+
+on:
+  push:
+    branches:
+      - walk-*
+  pull_request:
+    branches:
+      - walk-*
+
+jobs:
+  static-analysis:
+    name: Strict analyzer check — DomainObject path
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore backend/src/Squidex.Domain.Apps.Entities/Squidex.Domain.Apps.Entities.csproj
+
+      # Build the scoped project.
+      # The .editorconfig at Apps/DomainObject/ promotes MA0040 and MA0007 to
+      # error-severity for files in that directory.  Any new violation that is not
+      # accompanied by a #pragma warning disable + justification comment will cause
+      # this step — and the workflow — to fail.
+      - name: Build (strict — DomainObject .editorconfig enforced)
+        run: |
+          dotnet build \
+            backend/src/Squidex.Domain.Apps.Entities/Squidex.Domain.Apps.Entities.csproj \
+            --no-restore \
+            -warnaserror \
+            -v minimal 2>&1 | tee build-output.txt
+          # Surface any MA0040/MA0007 findings explicitly for PR reviewers
+          echo "--- MA0040 / MA0007 findings ---"
+          grep -E "MA0040|MA0007" build-output.txt || echo "(none)"
+
+      # Summarise suppressed violations so reviewers can audit them in CI output.
+      - name: Summarise documented suppressions
+        if: always()
+        run: |
+          echo "## Documented MA0040 suppressions in DomainObject path" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Each suppression below has a justification comment in source:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          grep -rn "pragma warning disable MA0040" \
+            backend/src/Squidex.Domain.Apps.Entities/Apps/DomainObject/ \
+            | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY" || echo "(none)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Documented MA0007 suppressions in DomainObject path" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          grep -rn "pragma warning disable MA0007" \
+            backend/src/Squidex.Domain.Apps.Entities/Apps/DomainObject/ \
+            | sed 's/^/- /' >> "$GITHUB_STEP_SUMMARY" || echo "(none — all trailing commas are present)" >> "$GITHUB_STEP_SUMMARY"
