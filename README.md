@@ -54,6 +54,77 @@ Current Version ![GitHub release](https://img.shields.io/github/release/squidex/
 * [razims](https://github.com/razims): GridFS support.
 * [sauravvijay](https://github.com/sauravvijay): Kafka Rule action.
 
+## Running Tests and Coverage
+
+### Quick test run (GHCP exercises)
+
+```bash
+# From repo root
+./test-crawl.sh
+```
+
+### Coverage report (Cobertura XML + HTML)
+
+Coverlet is pre-configured via `backend/tests/coverlet.runsettings.xml`.
+
+**macOS / Linux — individual suite:**
+
+```bash
+cd backend/tests
+
+# Core model + operations
+dotnet test Squidex.Domain.Apps.Core.Tests/Squidex.Domain.Apps.Core.Tests.csproj \
+  --filter "Category!=Dependencies&Category!=TestContainer" \
+  --collect "XPlat Code Coverage" \
+  --results-directory ./_coverage-out \
+  --settings coverlet.runsettings.xml
+
+# Domain entities (AppDomainObject etc.)
+dotnet test Squidex.Domain.Apps.Entities.Tests/Squidex.Domain.Apps.Entities.Tests.csproj \
+  --filter "Category!=Dependencies&Category!=TestContainer" \
+  --collect "XPlat Code Coverage" \
+  --results-directory ./_coverage-out \
+  --settings coverlet.runsettings.xml
+```
+
+The Cobertura XML is written to `backend/tests/_coverage-out/<guid>/coverage.cobertura.xml`.
+
+**Generate an HTML report** (requires [ReportGenerator](https://github.com/danielpalme/ReportGenerator)):
+
+```bash
+dotnet tool install -g dotnet-reportgenerator-globaltool
+
+reportgenerator \
+  -reports:"backend/tests/_coverage-out/**/coverage.cobertura.xml" \
+  -targetdir:"backend/tests/_coverage-out/report" \
+  -reporttypes:Html
+
+open backend/tests/_coverage-out/report/index.html
+```
+
+**Windows (PowerShell):** use `backend/tests/RunCoverage.ps1 -testAll` — see the script header for individual suite flags.
+
+### Baseline coverage (as of Walk Ex2)
+
+| Suite | Packages covered | Line % | Branch % |
+|---|---|---|---|
+| `Squidex.Domain.Apps.Core.Tests` | Core.Model · Core.Operations · Events · Infrastructure · Shared | **57.2 %** | **57.2 %** |
+| `Squidex.Domain.Apps.Entities.Tests` | + Entities · Users · Web | **56.9 %** | **48.4 %** |
+
+> These numbers reflect the two suites relevant to the GHCP exercises. Full project coverage (all suites) will be higher once Infrastructure, Users, and Web test suites are also collected.
+
+### Including coverage in a PR description
+
+Copy this snippet into your PR body, replacing the placeholders:
+
+```
+## Evidence
+- Tests: `dotnet test … --collect "XPlat Code Coverage"`
+  - Suite: Squidex.Domain.Apps.Core.Tests — Line: XX.X %  Branch: XX.X %
+  - Suite: Squidex.Domain.Apps.Entities.Tests — Line: XX.X %  Branch: XX.X %
+- Coverage delta vs baseline: +/- X.X pp (line)
+```
+
 ## Contributing
 
 Please create issues to report bugs, suggest new functionalities, ask questions or just share your thoughts about the project. We will really appreciate your contribution, thanks.
