@@ -15,6 +15,7 @@ using Squidex.Domain.Apps.Core.TestHelpers;
 using Squidex.Domain.Apps.Entities.Apps.Commands;
 using Squidex.Domain.Apps.Entities.Billing;
 using Squidex.Domain.Apps.Entities.TestHelpers;
+using Squidex.Domain.Apps.Events.Apps;
 using Squidex.Infrastructure;
 using Squidex.Infrastructure.Json.Objects;
 using Squidex.Shared.Users;
@@ -616,6 +617,68 @@ public class AppDomainObjectTests : HandlerTestBase<App>
         var actual = await PublishIdempotentAsync(sut, command);
 
         await VerifySutAsync(actual);
+    }
+
+    // -------------------------------------------------------------------------
+    // Contract tests — event envelope shape for the language-operation boundary
+    // These tests assert the required fields on the published event without
+    // comparing the full sut snapshot, so they fail fast if any field is
+    // renamed, removed, or gets an unexpected default value.
+    // To update the contract intentionally: change the event type or field,
+    // update the assertion here, and document the change in
+    // ai-track-docs/contracts.md § Updating the contract.
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task AddLanguage_event_contract_payload_has_required_fields()
+    {
+        await ExecuteCreateAsync();
+        await PublishAsync(sut, new AddLanguage { Language = Language.DE });
+
+        var envelope = Assert.Single(LastEvents);
+        var payload = Assert.IsType<AppLanguageAdded>(envelope.Payload);
+
+        Assert.Equal(Language.DE, payload.Language);         // consumer: which language was added
+        Assert.NotEqual(default, payload.AppId);             // consumer: which app owns this event
+        Assert.NotNull(payload.Actor);                       // consumer: who triggered the command
+        Assert.False(payload.FromRule);                      // default: not triggered by a rule engine
+    }
+
+    [Fact]
+    public async Task RemoveLanguage_event_contract_payload_has_required_fields()
+    {
+        await ExecuteCreateAsync();
+        await ExecuteAddLanguageAsync(Language.DE);
+        await PublishAsync(sut, new RemoveLanguage { Language = Language.DE });
+
+        var envelope = Assert.Single(LastEvents);
+        var payload = Assert.IsType<AppLanguageRemoved>(envelope.Payload);
+
+        Assert.Equal(Language.DE, payload.Language);
+        Assert.NotEqual(default, payload.AppId);
+        Assert.NotNull(payload.Actor);
+        Assert.False(payload.FromRule);
+    }
+
+    [Fact]
+    public async Task UpdateLanguage_event_contract_payload_has_required_fields()
+    {
+        var fallback = new[] { Language.EN };
+
+        await ExecuteCreateAsync();
+        await ExecuteAddLanguageAsync(Language.DE);
+        await PublishAsync(sut, new UpdateLanguage { Language = Language.DE, Fallback = fallback, IsOptional = true });
+
+        var envelope = Assert.Single(LastEvents);
+        var payload = Assert.IsType<AppLanguageUpdated>(envelope.Payload);
+
+        Assert.Equal(Language.DE, payload.Language);
+        Assert.NotEqual(default, payload.AppId);
+        Assert.NotNull(payload.Actor);
+        Assert.False(payload.FromRule);
+        Assert.True(payload.IsOptional);                     // consumer: optional flag must round-trip
+        Assert.False(payload.IsMaster);                      // DE is not master (EN is)
+        Assert.Equal(fallback, payload.Fallback);            // consumer: fallback chain must round-trip
     }
 
     [Fact]
