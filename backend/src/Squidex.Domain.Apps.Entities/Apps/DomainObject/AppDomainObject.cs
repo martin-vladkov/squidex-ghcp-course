@@ -5,7 +5,6 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
-using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -423,13 +422,9 @@ public partial class AppDomainObject(
 
     private void UpdateLanguage(UpdateLanguage command)
     {
-        var sw = Stopwatch.StartNew();
+        var sw = ValueStopwatch.StartNew();
         Raise(command, new AppLanguageUpdated());
-        if (logLanguageOps)
-        {
-            log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
-                "UpdateLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
-        }
+        LogLanguageOp("UpdateLanguage", command.Language, sw.Stop());
     }
 
     private void AssignContributor(AssignContributor command, bool isAdded)
@@ -469,23 +464,24 @@ public partial class AppDomainObject(
 
     private void AddLanguage(AddLanguage command)
     {
-        var sw = Stopwatch.StartNew();
+        var sw = ValueStopwatch.StartNew();
         Raise(command, new AppLanguageAdded());
-        if (logLanguageOps)
-        {
-            log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
-                "AddLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
-        }
+        LogLanguageOp("AddLanguage", command.Language, sw.Stop());
     }
 
     private void RemoveLanguage(RemoveLanguage command)
     {
-        var sw = Stopwatch.StartNew();
+        var sw = ValueStopwatch.StartNew();
         Raise(command, new AppLanguageRemoved());
+        LogLanguageOp("RemoveLanguage", command.Language, sw.Stop());
+    }
+
+    private void LogLanguageOp(string op, Language language, long elapsedMs)
+    {
         if (logLanguageOps)
         {
             log.LogInformation("op={Op} status={Status} elapsed_ms={ElapsedMs} language={Language}",
-                "RemoveLanguage", "ok", sw.ElapsedMilliseconds, command.Language);
+                op, "ok", elapsedMs, language);
         }
     }
 

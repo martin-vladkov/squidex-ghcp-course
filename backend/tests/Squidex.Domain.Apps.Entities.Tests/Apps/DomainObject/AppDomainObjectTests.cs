@@ -560,6 +560,27 @@ public class AppDomainObjectTests : HandlerTestBase<App>
     }
 
     [Fact]
+    public async Task LogLanguageOp_emits_all_required_structured_fields()
+    {
+        // Contract test: the log message template must keep op/status/elapsed_ms/language
+        // fields intact after any refactor of the logging helper.
+        var command = new AddLanguage { Language = Language.DE };
+
+        await ExecuteCreateAsync();
+        await PublishAsync(sut, command);
+
+        A.CallTo(log)
+            .Where(call =>
+                call.Method.Name == "Log" &&
+                call.Arguments.Get<LogLevel>(0) == LogLevel.Information &&
+                call.Arguments[2]!.ToString()!.Contains("op=") &&
+                call.Arguments[2]!.ToString()!.Contains("status=") &&
+                call.Arguments[2]!.ToString()!.Contains("elapsed_ms=") &&
+                call.Arguments[2]!.ToString()!.Contains("language="))
+            .MustHaveHappenedOnceOrMore();
+    }
+
+    [Fact]
     public async Task AddLanguage_should_create_events_and_add_language()
     {
         var command = new AddLanguage { Language = Language.DE };
