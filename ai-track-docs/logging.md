@@ -183,3 +183,29 @@ private void LogLanguageOp(string op, Language language, long elapsedMs)
 ```
 
 **Fail-open design:** if `IConfiguration` is unavailable or the value is unparseable (e.g. `"yes"` instead of `"true"`), construction never throws and language ops continue normally with logging enabled. A bad config value silences nothing and breaks nothing.
+
+---
+
+## Flag lifecycle — `Features:LogLanguageOps`
+
+| Stage | Detail |
+|-------|--------|
+| **Created** | Crawl Ex13 — `AppDomainObject.cs` constructor reads the key once at startup |
+| **Default** | `true` (logging **on**) — fail-open; missing or malformed value also defaults to `true` |
+| **Enable** | Set `Features:LogLanguageOps=true` in appsettings, env var, or secrets |
+| **Disable** | Set `Features:LogLanguageOps=false` — suppresses the three `LogInformation` calls; the OTel counter (`squidex.app.language_ops`) still fires regardless |
+| **Env-var form** | `Features__LogLanguageOps=false` (double-underscore = config hierarchy separator in .NET) |
+| **Removal criteria** | Remove when the structured log is either promoted to always-on (delete the `if` guard) or permanently deleted. Do not remove while any operator uses the flag to reduce log volume. |
+
+### Validated states
+
+| State | Test name | Assertion |
+|-------|-----------|-----------|
+| ON (default) | `AddLanguage_should_log_structured_operation` | `LogInformation` called ≥ 1× |
+| ON (default) | `LogLanguageOp_emits_all_required_structured_fields` | op / status / elapsed_ms / language fields present |
+| OFF | `AddLanguage_should_not_log_when_toggle_is_off` | `LogInformation` never called |
+| Fail-open (throws) | `AddLanguage_should_fail_open_when_config_throws` | construction succeeds; logging on |
+| Fail-open (malformed) | `AddLanguage_should_fail_open_when_toggle_value_is_malformed` | construction succeeds; logging on |
+
+CI matrix: `.github/workflows/ghcp-walk-featureflags.yml` — runs `flag-on` and `flag-off` jobs in parallel with `Features__LogLanguageOps` set explicitly in each job's `env:`.
+

@@ -1,0 +1,81 @@
+name: Walk – Feature Flag Validation (Features:LogLanguageOps)
+
+# Validates both states of the Features:LogLanguageOps toggle.
+#
+# Flag:    Features:LogLanguageOps  (AppDomainObject.cs)
+# Default: true (logging on)
+# .NET env-var form: Features__LogLanguageOps (double-underscore separator)
+#
+# The matrix runs two jobs in parallel:
+#   flag-on  — asserts the structured log IS emitted (default behaviour)
+#   flag-off — asserts the structured log is suppressed (opt-out behaviour)
+#
+# All steps are required (no continue-on-error) because a flag that silently
+# breaks either mode defeats the purpose of having a flag at all.
+#
+# How to read the results:
+#   GitHub Actions → Checks → each matrix variant is labelled
+#   "Feature flag validation / Validate flag (on)" etc.
+
+on:
+  push:
+    branches:
+      - walk-**
+  pull_request:
+    branches:
+      - walk-**
+
+permissions:
+  contents: read
+
+jobs:
+  validate-flag:
+    name: Validate flag (${{ matrix.flag_state }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false   # run both variants even if one fails
+      matrix:
+        include:
+          # ── Flag ON (default) ─────────────────────────────────────────────
+          # Expect: logging fires for AddLanguage / RemoveLanguage / UpdateLanguage
+          - flag_state: "on"
+            env_value: "true"
+            test_filter: >-
+              AddLanguage_should_log_structured_operation|
+              LogLanguageOp_emits_all_required_structured_fields|
+              AddLanguage_increments_language_ops_counter
+
+          # ── Flag OFF ──────────────────────────────────────────────────────
+          # Expect: logging is suppressed; metric counter still fires
+          - flag_state: "off"
+            env_value: "false"
+            test_filter: >-
+              AddLanguage_should_not_log_when_toggle_is_off|
+              AddLanguage_increments_language_ops_counter
+
+    env:
+      # Override the feature flag for the entire job.
+      # Double-underscore is the .NET configuration hierarchy separator.
+      Features__LogLanguageOps: ${{ matrix.env_value }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore NuGet packages
+        run: dotnet restore backend/Squidex.slnx
+
+      - name: Run tests — flag ${{ matrix.flag_state }}
+        run: |
+          echo "Features__LogLanguageOps=$Features__LogLanguageOps"
+          dotnet test \
+            backend/tests/Squidex.Domain.Apps.Entities.Tests/Squidex.Domain.Apps.Entities.Tests.csproj \
+            --filter "FullyQualifiedName~${{ matrix.test_filter }}" \
+            --logger "console;verbosity=normal" \
+            --no-restore
