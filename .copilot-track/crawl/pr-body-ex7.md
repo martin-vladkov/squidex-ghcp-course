@@ -1,28 +1,21 @@
-## GHCP — Crawl Exercise 7: Dependency hygiene
+## Summary
+- Added `ai-track-docs/dependencies.md` — full NuGet/npm dependency audit, pinning policy, update cadence, and CLI commands for checking outdated packages
+- Added `"engines": {"node": ">=22.0.0"}` to `frontend/package.json` — only undocumented pinning gap found (all NuGet packages already use exact version pins)
+- No version upgrades performed
+- Files touched: `ai-track-docs/dependencies.md`, `frontend/package.json`
 
-### What changed
-- **New:** `ai-track-docs/dependencies.md` — full dependency audit covering:
-  - Policy table (exact pins, no unreviewed major upgrades, CVE exemption)
-  - Runtime version matrix (.NET 10, Node 22)
-  - All direct NuGet packages for `Squidex.Domain.Apps.Core.Model` and its test project
-  - Frontend npm critical vs. tooling deps with pin-style assessment
-  - Identified pinning gaps + disposition for each
-  - Update cadence recommendations per layer
-  - CLI commands to check for outdated packages
-- **Modified:** `frontend/package.json` — added `"engines": {"node": ">=22.0.0"}` to document the required Node runtime (only gap requiring a file change)
+## Evidence
+- Tests/logs/metrics:
+  ```
+  dotnet test tests/Squidex.Domain.Apps.Core.Tests/Squidex.Domain.Apps.Core.Tests.csproj \
+    --filter "FullyQualifiedName~LanguagesConfigTests"
+  → Passed! - Failed: 0, Passed: 22, Skipped: 0, Total: 22
+  ```
 
-### Why these changes
-All backend NuGet packages already use exact version pins. Frontend production deps (`@angular/*`) are pinned exactly; only tooling deps (`vitest`, `eslint`) use `^` ranges — acceptable for now. The only undocumented constraint was the Node runtime version, fixed with the `engines` field.
+## Risk & Rollback
+- Risk: low
+- Rollback: git revert d8f28573c
 
-### Tests
-No backend test changes. Existing 22 `LanguagesConfigTests` pass unchanged — `dotnet test` confirms `Failed: 0, Passed: 22`.
-
-### Copilot guidance used
-- Prompt: "List all direct NuGet packages in the csproj and assess pinning strategy"
-- Prompt: "What gaps exist in runtime version documentation for this project?"
-
-### Checklist
-- [x] `ai-track-docs/dependencies.md` created
-- [x] Node engines constraint added to `frontend/package.json`
-- [x] No version upgrades performed
-- [x] Existing tests green
+## Track
+- Level: Crawl
+- Exercise: Ex7
