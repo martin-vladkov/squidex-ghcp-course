@@ -11,8 +11,14 @@ using Squidex.Infrastructure.Collections;
 
 namespace Squidex.Domain.Apps.Core.Apps;
 
+/// <summary>
+/// Immutable, value-equality collection of languages configured for an app.
+/// Every mutating method (<see cref="Set"/>, <see cref="Remove"/>, <see cref="MakeMaster"/>)
+/// returns a new instance; the current instance is never modified.
+/// </summary>
 public sealed class LanguagesConfig : IFieldPartitioning
 {
+    /// <summary>Singleton config pre-seeded with English (<c>en</c>) as the only and master language.</summary>
     public static readonly LanguagesConfig English = new (
         new Dictionary<string, LanguageConfig>
         {
@@ -23,10 +29,13 @@ public sealed class LanguagesConfig : IFieldPartitioning
     private readonly Dictionary<string, LanguageConfig> values;
     private readonly string master;
 
+    /// <summary>ISO 639-1 key of the master (default) language. Always present in <see cref="Values"/>.</summary>
     public string Master => master;
 
+    /// <summary>All configured ISO 639-1 language keys, including the master.</summary>
     public IEnumerable<string> AllKeys => values.Keys;
 
+    /// <summary>Full map of language key → <see cref="LanguageConfig"/> (optional flag, fallback list).</summary>
     public IReadOnlyDictionary<string, LanguageConfig> Values => values;
 
     public LanguagesConfig(Dictionary<string, LanguageConfig> values, string master)
@@ -135,6 +144,7 @@ public sealed class LanguagesConfig : IFieldPartitioning
         };
     }
 
+    /// <summary>Returns <c>true</c> when <paramref name="key"/> is the master language key.</summary>
     public bool IsMaster(string key) => Equals(Master, key);
 
     public string? GetName(string key)
@@ -182,6 +192,7 @@ public sealed class LanguagesConfig : IFieldPartitioning
         }
     }
 
+    /// <summary>Returns <c>true</c> when <paramref name="key"/> is a non-null configured language key.</summary>
     public bool Contains(string key) => key != null && values.ContainsKey(key);
 
     public override string ToString()
