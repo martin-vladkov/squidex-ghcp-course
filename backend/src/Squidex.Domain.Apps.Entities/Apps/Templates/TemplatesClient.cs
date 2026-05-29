@@ -29,7 +29,9 @@ public sealed partial class TemplatesClient(IHttpClientFactory httpClientFactory
         {
             var url = $"{repository.ContentUrl}/README.md";
 
-            var text = await httpClient.GetStringAsync(url, ct);
+            var text = await HttpRetryHelper.ExecuteWithRetryAsync(
+                innerCt => httpClient.GetStringAsync(url, innerCt),
+                ct: ct);
 
             foreach (var match in RegexTemplate.Matches(text).OfType<Match>())
             {
@@ -56,7 +58,9 @@ public sealed partial class TemplatesClient(IHttpClientFactory httpClientFactory
         {
             var url = $"{repository.ContentUrl}/README.md";
 
-            var text = await httpClient.GetStringAsync(url, ct);
+            var text = await HttpRetryHelper.ExecuteWithRetryAsync(
+                innerCt => httpClient.GetStringAsync(url, innerCt),
+                ct: ct);
 
             foreach (var match in RegexTemplate.Matches(text).OfType<Match>())
             {
@@ -103,7 +107,9 @@ public sealed partial class TemplatesClient(IHttpClientFactory httpClientFactory
         {
             var url = new Uri($"{repository.ContentUrl}/{name}/README.md", UriKind.Absolute);
 
-            var response = await httpClient.GetAsync(url, ct);
+            var response = await HttpRetryHelper.ExecuteWithRetryAsync(
+                innerCt => httpClient.GetAsync(url, innerCt),
+                ct: ct);
             if (response.IsSuccessStatusCode)
             {
                 var text = await response.Content.ReadAsStringAsync(ct);
