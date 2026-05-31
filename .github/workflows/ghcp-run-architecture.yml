@@ -26,6 +26,7 @@ jobs:
   diagram-check:
     name: Architecture diagram — staleness check
     runs-on: ubuntu-latest
+    timeout-minutes: 5  # the check script is pure bash; > 5 min means something is wrong
 
     steps:
       - name: Checkout
@@ -51,6 +52,7 @@ jobs:
   diagram-validate:
     name: Architecture diagram — Mermaid syntax validation
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # npm install + Puppeteer render; > 10 min means a hang
     needs: diagram-check
 
     steps:
@@ -61,9 +63,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          # Note: cache: 'npm' omitted — it requires a package-lock.json which
+          # this repo does not have at root level.  The global-module cache below
+          # (actions/cache@v4 for ~/.npm-global) provides the equivalent benefit.
 
+      # Cache the global npm prefix so the Mermaid CLI binary survives across
+      # runs with the same pinned version.  Keyed on the exact version so an
+      # upgrade invalidates automatically.
+      # Rollback: remove this step — npm install will re-download every time.
+      - name: Cache global npm modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm-global
+          key: npm-global-${{ runner.os }}-mermaid-11.15.0
+
+      - name: Configure npm global prefix
+        run: |
+          mkdir -p ~/.npm-global
+          npm config set prefix '~/.npm-global'
+          echo "$HOME/.npm-global/bin" >> "$GITHUB_PATH"
+
+      # Pinned to 11.15.0 (latest stable as of 2026-05-31).
+      # Using @latest risks silent breakage when a new major version ships with
+      # breaking CLI flags or Puppeteer API changes.  Update the pin and cache
+      # key together whenever a new version is vetted.
       - name: Install Mermaid CLI
-        run: npm install -g @mermaid-js/mermaid-cli@latest
+        run: npm install -g @mermaid-js/mermaid-cli@11.15.0
 
       - name: Extract auto-generated Mermaid block
         run: |
