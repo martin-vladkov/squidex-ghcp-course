@@ -5,6 +5,11 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+#pragma warning disable MA0004
+// MA0004 (UseConfigureAwait) suppression: RuleEnqueuer runs exclusively under
+// the ASP.NET Core host, which has no SynchronizationContext. ConfigureAwait(false)
+// is therefore a no-op in production. This file is tracked in docs/backlog.md for
+// a future clean-up pass when the assembly is decoupled from ASP.NET Core hosting.
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

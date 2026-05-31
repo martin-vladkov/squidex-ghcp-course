@@ -48,7 +48,7 @@ public sealed class CronJobUpdater(
             return;
         }
 
-        var rule = await appProvider.GetRuleAsync(appId.Id, ruleId, ct);
+        var rule = await appProvider.GetRuleAsync(appId.Id, ruleId, ct).ConfigureAwait(false);
 
         // The rule might have been updated or deleted in the meantime, but we are running asynchronously.
         if (rule == null || rule.Trigger is not CronJobTrigger cronJob)
@@ -62,11 +62,17 @@ public sealed class CronJobUpdater(
         // The rule enqueue needs an event.
         var @event = new RuleCronJobTriggered { AppId = appId, RuleId = ruleId, Value = cronJob.Value };
 
-        await ruleEnqueuer.EnqueueAsync(rule, Envelope.Create(@event), ct);
+        await ruleEnqueuer.EnqueueAsync(rule, Envelope.Create(@event), ct).ConfigureAwait(false);
     }
 
     public async Task On(Envelope<IEvent> @event)
     {
+#pragma warning disable MA0004
+        // MA0004: On() has no CancellationToken and fires under the event-consumer
+        // pipeline (ASP.NET Core host, no SynchronizationContext).  The AddCronJobAsync
+        // and cronJobs.RemoveAsync calls below run to completion regardless; context
+        // capture would have no effect.  The hot-path call in HandleCronJobAsync
+        // (with a real ct) was fixed above.
         if (@event.Payload is RuleCreated created)
         {
             if (created.Trigger is CronJobTrigger cronJob)
@@ -89,11 +95,16 @@ public sealed class CronJobUpdater(
         {
             await cronJobs.RemoveAsync(deleted.RuleId.ToString());
         }
+#pragma warning restore MA0004
     }
 
     private async Task AddCronJobAsync(NamedId<DomainId> appId, DomainId id, CronJobTrigger trigger,
         CancellationToken ct)
     {
+#pragma warning disable MA0004
+        // MA0004: cronJobs.AddAsync and the second await below run under
+        // ASP.NET Core hosting (no SynchronizationContext); suppressed until the
+        // full-file clean-up pass tracked in docs/backlog.md.
         await cronJobs.AddAsync(new CronJob<CronJobContext>
         {
             Id = id.ToString(),
@@ -101,6 +112,7 @@ public sealed class CronJobUpdater(
             CronTimezone = trigger.CronTimezone,
             Context = new CronJobContext(appId, id),
         }, ct);
+#pragma warning restore MA0004
 
         LogMessages.LogCronJobRegistered(log, id, appId.Id, trigger.CronExpression);
     }

@@ -43,7 +43,7 @@ public sealed class BackupRules(Rebuilder rebuilder) : IBackupHandler
     {
         if (ruleIds.Count > 0)
         {
-            await rebuilder.InsertManyAsync<RuleDomainObject, Rule>(ruleIds, BatchSize, ct);
+            await rebuilder.InsertManyAsync<RuleDomainObject, Rule>(ruleIds, BatchSize, ct).ConfigureAwait(false);
         }
     }
 }
