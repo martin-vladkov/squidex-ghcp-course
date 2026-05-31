@@ -27,6 +27,8 @@ public sealed class CronJobUpdater(
     : IEventConsumer, IInitializable
 {
     private readonly bool cronJobTriggerEnabled = options.Value.EnableCronJobTrigger;
+    private readonly int resilienceMaxAttempts = options.Value.ResilienceMaxAttempts;
+    private readonly int resilienceInitialDelayMs = options.Value.ResilienceInitialDelayMs;
     public StreamFilter EventsFilter => StreamFilter.Prefix("rule-");
 
     public Task InitializeAsync(
@@ -62,7 +64,11 @@ public sealed class CronJobUpdater(
         // The rule enqueue needs an event.
         var @event = new RuleCronJobTriggered { AppId = appId, RuleId = ruleId, Value = cronJob.Value };
 
-        await ruleEnqueuer.EnqueueAsync(rule, Envelope.Create(@event), ct).ConfigureAwait(false);
+        await RulesResilienceHelper.ExecuteWithRetryAsync(
+            t => ruleEnqueuer.EnqueueAsync(rule, Envelope.Create(@event), t),
+            maxAttempts: resilienceMaxAttempts,
+            initialDelayMs: resilienceInitialDelayMs,
+            ct: ct).ConfigureAwait(false);
     }
 
     public async Task On(Envelope<IEvent> @event)
