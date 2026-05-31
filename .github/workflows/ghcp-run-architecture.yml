@@ -63,7 +63,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'   # caches ~/.npm tarball cache; speeds up repeated installs
+          # Note: cache: 'npm' omitted — it requires a package-lock.json which
+          # this repo does not have at root level.  The global-module cache below
+          # (actions/cache@v4 for ~/.npm-global) provides the equivalent benefit.
 
       # Cache the global npm prefix so the Mermaid CLI binary survives across
       # runs with the same pinned version.  Keyed on the exact version so an
