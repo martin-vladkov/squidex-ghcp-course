@@ -96,6 +96,9 @@ internal static partial class LogMessages
     [LoggerMessage(Level = LogLevel.Warning, Message = "Cron job skipped for rule '{ruleId}' in app '{appId}': rule not found or trigger type changed.")]
     public static partial void LogCronJobSkipped(ILogger logger, DomainId ruleId, DomainId appId);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Cron job skipped for rule '{ruleId}' in app '{appId}': EnableCronJobTrigger feature flag is disabled.")]
+    public static partial void LogCronJobTriggerDisabled(ILogger logger, DomainId ruleId, DomainId appId);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Cron job registered for rule '{ruleId}' in app '{appId}' with expression '{cronExpression}'.")]
     public static partial void LogCronJobRegistered(ILogger logger, DomainId ruleId, DomainId appId, string cronExpression);
 
