@@ -31,6 +31,7 @@ public sealed partial class TemplatesClient(IHttpClientFactory httpClientFactory
 
             var text = await HttpRetryHelper.ExecuteWithRetryAsync(
                 innerCt => httpClient.GetStringAsync(url, innerCt),
+                policy: RetryPolicy.Default,
                 ct: ct);
 
             foreach (var match in RegexTemplate.Matches(text).OfType<Match>())
@@ -60,6 +61,7 @@ public sealed partial class TemplatesClient(IHttpClientFactory httpClientFactory
 
             var text = await HttpRetryHelper.ExecuteWithRetryAsync(
                 innerCt => httpClient.GetStringAsync(url, innerCt),
+                policy: RetryPolicy.Default,
                 ct: ct);
 
             foreach (var match in RegexTemplate.Matches(text).OfType<Match>())
@@ -109,6 +111,7 @@ public sealed partial class TemplatesClient(IHttpClientFactory httpClientFactory
 
             var response = await HttpRetryHelper.ExecuteWithRetryAsync(
                 innerCt => httpClient.GetAsync(url, innerCt),
+                policy: RetryPolicy.Default,
                 ct: ct);
             if (response.IsSuccessStatusCode)
             {

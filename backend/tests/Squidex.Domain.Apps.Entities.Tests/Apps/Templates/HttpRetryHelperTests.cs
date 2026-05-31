@@ -20,8 +20,7 @@ public class HttpRetryHelperTests
                 calls++;
                 return Task.FromResult(42);
             },
-            maxAttempts: 3,
-            initialDelayMs: 0);
+            policy: new RetryPolicy(3, 0));
 
         Assert.Equal(42, result);
         Assert.Equal(1, calls);
@@ -43,8 +42,7 @@ public class HttpRetryHelperTests
 
                 return Task.FromResult("ok");
             },
-            maxAttempts: 3,
-            initialDelayMs: 0);
+            policy: new RetryPolicy(3, 0));
 
         Assert.Equal("ok", result);
         Assert.Equal(2, calls);
@@ -69,8 +67,7 @@ public class HttpRetryHelperTests
 
                 return Task.FromResult("after-timeout");
             },
-            maxAttempts: 3,
-            initialDelayMs: 0);
+            policy: new RetryPolicy(3, 0));
 
         Assert.Equal("after-timeout", result);
         Assert.Equal(2, calls);
@@ -88,8 +85,7 @@ public class HttpRetryHelperTests
                     calls++;
                     throw new HttpRequestException("always fails");
                 },
-                maxAttempts: 3,
-                initialDelayMs: 0));
+                policy: new RetryPolicy(3, 0)));
 
         // All 3 attempts must have been made before giving up.
         Assert.Equal(3, calls);
@@ -107,8 +103,7 @@ public class HttpRetryHelperTests
                     calls++;
                     throw new InvalidOperationException("programming error");
                 },
-                maxAttempts: 3,
-                initialDelayMs: 0));
+                policy: new RetryPolicy(3, 0)));
 
         // Non-transient exceptions must fail immediately — no retry.
         Assert.Equal(1, calls);
