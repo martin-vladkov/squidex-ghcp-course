@@ -112,6 +112,30 @@ public class GuardAppLanguagesTests : GivenContext, IClassFixture<TranslationsFi
     }
 
     [Fact]
+    public void CanUpdateLanguage_should_throw_exception_when_promoting_to_master_with_optional_flag()
+    {
+        // Language.DE is not currently the master, but command.IsMaster = true triggers
+        // the same master-language constraint as if it already were master.
+        // Setting IsOptional = true while promoting to master must be rejected.
+        var command = new UpdateLanguage { Language = Language.DE, IsMaster = true, IsOptional = true };
+
+        ValidationAssert.Throws(() => GuardAppLanguages.CanUpdate(command, App),
+            new ValidationError("Master language cannot be made optional.", "IsMaster"));
+    }
+
+    [Fact]
+    public void CanUpdateLanguage_should_throw_exception_when_promoting_to_master_with_fallbacks()
+    {
+        // Language.DE is not currently the master, but command.IsMaster = true triggers
+        // the same master-language constraint as if it already were master.
+        // Setting Fallback while promoting to master must be rejected.
+        var command = new UpdateLanguage { Language = Language.DE, IsMaster = true, Fallback = [Language.EN] };
+
+        ValidationAssert.Throws(() => GuardAppLanguages.CanUpdate(command, App),
+            new ValidationError("Master language cannot have fallback languages.", "Fallback"));
+    }
+
+    [Fact]
     public void CanUpdateLanguage_should_throw_exception_if_not_found()
     {
         var command = new UpdateLanguage { Language = Language.IT };
