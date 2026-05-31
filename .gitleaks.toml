@@ -5,6 +5,11 @@
 # is any doubt) and leave a justification comment.
 #
 # Run locally:  gitleaks detect --source . --no-git
+#
+# CI coverage
+# -----------
+# walk-** branches: ghcp-walk-security.yml
+# run-**  branches: ghcp-run-security.yml  (added Run Ex8 — previously uncovered)
 
 title = "Squidex secret-scan config"
 
