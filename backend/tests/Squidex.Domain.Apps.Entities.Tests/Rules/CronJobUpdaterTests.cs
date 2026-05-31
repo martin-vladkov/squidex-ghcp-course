@@ -5,6 +5,7 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using Microsoft.Extensions.Logging;
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Domain.Apps.Core.Rules.Triggers;
 using Squidex.Domain.Apps.Entities.TestHelpers;
@@ -20,11 +21,12 @@ public sealed class CronJobUpdaterTests : GivenContext
 {
     private readonly ICronJobManager<CronJobContext> cronJobs = A.Fake<ICronJobManager<CronJobContext>>();
     private readonly IRuleEnqueuer ruleEnqueuer = A.Fake<IRuleEnqueuer>();
+    private readonly ILogger<CronJobUpdater> log = A.Fake<ILogger<CronJobUpdater>>();
     private readonly CronJobUpdater sut;
 
     public CronJobUpdaterTests()
     {
-        sut = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer);
+        sut = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer, log);
     }
 
     [Fact]

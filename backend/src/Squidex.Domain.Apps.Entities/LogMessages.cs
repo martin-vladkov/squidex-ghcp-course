@@ -89,4 +89,16 @@ internal static partial class LogMessages
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Failed to execute search from source {source} with query '{query}'.")]
     public static partial void LogFailedToExecuteSearch(ILogger logger, string source, string query, Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cron job triggered for rule '{ruleId}' in app '{appId}'.")]
+    public static partial void LogCronJobTriggered(ILogger logger, DomainId ruleId, DomainId appId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Cron job skipped for rule '{ruleId}' in app '{appId}': rule not found or trigger type changed.")]
+    public static partial void LogCronJobSkipped(ILogger logger, DomainId ruleId, DomainId appId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Cron job registered for rule '{ruleId}' in app '{appId}' with expression '{cronExpression}'.")]
+    public static partial void LogCronJobRegistered(ILogger logger, DomainId ruleId, DomainId appId, string cronExpression);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Flow execution failed for rule '{ruleId}' owned by '{ownerId}'.")]
+    public static partial void LogFlowExecutionFailed(ILogger logger, string ruleId, string ownerId);
 }

@@ -5,6 +5,7 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using Microsoft.Extensions.Logging;
 using NodaTime;
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Flows.Internal.Execution;
@@ -12,7 +13,7 @@ using Squidex.Infrastructure;
 
 namespace Squidex.Domain.Apps.Entities.Rules;
 
-public sealed class RuleFlowTrackingCallback(IRuleUsageTracker ruleUsageTracker) : IFlowExecutionCallback<FlowEventContext>
+public sealed class RuleFlowTrackingCallback(IRuleUsageTracker ruleUsageTracker, ILogger<RuleFlowTrackingCallback> log) : IFlowExecutionCallback<FlowEventContext>
 {
     public IClock Clock { get; set; } = SystemClock.Instance;
 
@@ -25,6 +26,7 @@ public sealed class RuleFlowTrackingCallback(IRuleUsageTracker ruleUsageTracker)
         }
         else
         {
+            LogMessages.LogFlowExecutionFailed(log, state.DefinitionId, state.OwnerId);
             await TrackAsync(state, 0, 1, ct);
         }
     }
