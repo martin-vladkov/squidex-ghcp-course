@@ -1,9 +1,10 @@
 <!--
-  PR Description — GHCP Course (Crawl + Walk tracks)
+  PR Description — GHCP Course (Crawl + Walk + Run tracks)
 
   Title formats:
     Crawl: "GHCP -- Crawl: Ex<N> <short name>"
     Walk:  "GHCP -- Walk: Ex<N> <short name>"
+    Run:   "GHCP -- Run: Ex<N> <short name>"
 
   Rules:
     • Fill in EVERY section before submitting — delete placeholder lines.
@@ -11,6 +12,7 @@
     • Review Focus requires 3-5 specific bullets: file + what to check + why.
     • Verification Steps must be copy-pasteable commands a reviewer can run.
     • Rollback must name the exact git command or config toggle to undo the change.
+    • Run-track PRs must also complete the Reviewer Checklist below.
 -->
 
 ## Summary
@@ -67,6 +69,29 @@
 # Expected: <what to see>
 ```
 
+## Reviewer Checklist
+<!--
+  Run-track PRs: complete every item before requesting review.
+  Mark each as ✅ (pass), ⚠️ (finding — explain below), or N/A.
+  Crawl/Walk PRs: optional but encouraged.
+-->
+| # | Area | Question | Result |
+|---|------|----------|--------|
+| 1 | **Correctness** | Does the code do exactly what it claims? Are edge cases handled? | |
+| 2 | **Test coverage** | Are all new code paths covered by a test? Are pre-existing tests still passing? | |
+| 3 | **Security** | No new attack surface, hardcoded secrets, injection risk, or OWASP Top-10 issue? | |
+| 4 | **Performance** | No hot-path regressions? No unbounded allocations or synchronous I/O? | |
+| 5 | **Documentation** | Are public APIs, non-obvious choices, and rollback steps documented? | |
+
+### Findings & responses
+<!--
+  For each ⚠️ finding above, add a row:
+  | # | Finding | Resolution |
+-->
+| # | Finding | Resolution |
+|---|---------|------------|
+| — | _no findings_ | — |
+
 ## Track
-- Level: <!-- Crawl | Walk -->
+- Level: <!-- Crawl | Walk | Run -->
 - Exercise: Ex<!-- N -->

@@ -1,0 +1,33 @@
+# CODEOWNERS — GitHub automatically requests review from the listed owner(s)
+# whenever a PR touches the matching path.
+#
+# Syntax: <pattern>  @<github-username-or-team>
+# Patterns are evaluated last-match-wins (most specific wins).
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Added in Run Ex11 (PR Hygiene) to route review requests automatically.
+# Rollback: delete this file — no runtime impact.
+
+# Default owner for everything not matched below
+*                                          @martin-vladkov
+
+# Backend — domain logic
+/backend/src/Squidex.Domain.Apps.Entities/ @martin-vladkov
+/backend/src/Squidex.Domain.Apps.Core.Model/ @martin-vladkov
+/backend/src/Squidex.Infrastructure/      @martin-vladkov
+
+# Backend — data layer
+/backend/src/Squidex.Data.MongoDb/        @martin-vladkov
+/backend/src/Squidex.Data.EntityFramework/ @martin-vladkov
+
+# Tests
+/backend/tests/                            @martin-vladkov
+
+# CI/CD and repo hygiene
+/.github/                                  @martin-vladkov
+
+# Frontend
+/frontend/                                 @martin-vladkov
+
+# Documentation
+/docs/                                     @martin-vladkov
