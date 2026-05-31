@@ -24,6 +24,7 @@ jobs:
   secret-scan:
     name: Scan for secrets (gitleaks)
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # prevents hung Puppeteer / gitleaks from holding a runner for 6 h
 
     steps:
       - name: Checkout repository
@@ -43,10 +44,22 @@ jobs:
   vulnerability-scan:
     name: Scan for vulnerable NuGet packages
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # fail fast on hung restore or network issue
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # Cache the global NuGet package store keyed on all *.csproj content.
+      # On a warm cache hit the restore step completes in <5 s instead of ~60 s.
+      # Rollback: remove this step — the restore will simply download every time.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/Squidex.slnx') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
