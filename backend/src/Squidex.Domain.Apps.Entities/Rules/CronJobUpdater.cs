@@ -5,6 +5,7 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using Microsoft.Extensions.Logging;
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Domain.Apps.Core.Rules.Triggers;
 using Squidex.Domain.Apps.Events.Rules;
@@ -19,7 +20,8 @@ namespace Squidex.Domain.Apps.Entities.Rules;
 public sealed class CronJobUpdater(
     IAppProvider appProvider,
     ICronJobManager<CronJobContext> cronJobs,
-    IRuleEnqueuer ruleEnqueuer)
+    IRuleEnqueuer ruleEnqueuer,
+    ILogger<CronJobUpdater> log)
     : IEventConsumer, IInitializable
 {
     public StreamFilter EventsFilter => StreamFilter.Prefix("rule-");
@@ -41,8 +43,11 @@ public sealed class CronJobUpdater(
         // The rule might have been updated or deleted in the meantime, but we are running asynchronously.
         if (rule == null || rule.Trigger is not CronJobTrigger cronJob)
         {
+            LogMessages.LogCronJobSkipped(log, ruleId, appId.Id);
             return;
         }
+
+        LogMessages.LogCronJobTriggered(log, ruleId, appId.Id);
 
         // The rule enqueue needs an event.
         var @event = new RuleCronJobTriggered { AppId = appId, RuleId = ruleId, Value = cronJob.Value };
@@ -86,5 +91,7 @@ public sealed class CronJobUpdater(
             CronTimezone = trigger.CronTimezone,
             Context = new CronJobContext(appId, id),
         }, ct);
+
+        LogMessages.LogCronJobRegistered(log, id, appId.Id, trigger.CronExpression);
     }
 }
