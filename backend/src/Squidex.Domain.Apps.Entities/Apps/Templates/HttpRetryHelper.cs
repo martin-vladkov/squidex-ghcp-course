@@ -10,28 +10,23 @@ namespace Squidex.Domain.Apps.Entities.Apps.Templates;
 /// <summary>
 /// Lightweight retry helper with exponential backoff for transient HTTP failures.
 ///
-/// Tuning parameters (pass at each call site via optional arguments):
-///   maxAttempts    – total number of tries including the first (default 3; range
-///                    1-10 recommended; set to 1 to disable retrying).
-///   initialDelayMs – base delay in milliseconds before the first retry (default
-///                    200 ms); each subsequent delay doubles (200 → 400 → 800 …).
-///                    Keep ≤ 2000 ms for interactive flows; increase for background
-///                    jobs where latency tolerance is higher.
+/// Retry behaviour is controlled by a <see cref="RetryPolicy"/> value object.
+/// Pass <see cref="RetryPolicy.Default"/> (or omit the parameter) for standard
+/// production settings: 3 attempts, 200 ms initial delay.
 ///
 /// Transient conditions that are retried:
-///   HttpRequestException           – network/transport failure (DNS, TCP reset, etc.)
-///   TaskCanceledException where the caller's CancellationToken is NOT cancelled
-///                                  – HttpClient request timeout (not user cancel).
+///   <see cref="HttpRequestException"/>        – network/transport failure.
+///   <see cref="TaskCanceledException"/> where the caller's token is NOT cancelled
+///                                             – HttpClient request timeout.
 ///
 /// Conditions that are NOT retried (fail immediately):
-///   Any other exception type       – programming error; retrying would not help.
-///   TaskCanceledException where the caller's CancellationToken IS cancelled
-///                                  – explicit user/request cancellation; honour it.
+///   Any other exception type                  – programming error; retrying would not help.
+///   <see cref="TaskCanceledException"/> where the caller's token IS cancelled
+///                                             – explicit user/request cancellation; honour it.
 ///
 /// Rollback guidance:
-///   Remove the call to ExecuteWithRetryAsync and replace it with a direct await on
-///   the original operation call.  No state is persisted, so rollback is safe at
-///   any time.
+///   Replace <see cref="ExecuteWithRetryAsync{T}"/> with a direct await on the
+///   original operation.  No state is persisted, so rollback is safe at any time.
 /// </summary>
 public static class HttpRetryHelper
 {
@@ -44,10 +39,9 @@ public static class HttpRetryHelper
     ///   The async operation to execute. Receives the active <see cref="CancellationToken"/>
     ///   so individual HTTP requests remain cancellable between retries.
     /// </param>
-    /// <param name="maxAttempts">Maximum number of attempts (first try + retries). Default 3.</param>
-    /// <param name="initialDelayMs">
-    ///   Base delay in milliseconds before the first retry.  The delay doubles on each
-    ///   subsequent attempt.  Default 200 ms.
+    /// <param name="policy">
+    ///   Retry configuration. Defaults to <see cref="RetryPolicy.Default"/>
+    ///   (3 attempts, 200 ms initial backoff).
     /// </param>
     /// <param name="ct">
     ///   Cancellation token forwarded to <paramref name="operation"/> and to
@@ -56,27 +50,28 @@ public static class HttpRetryHelper
     /// <returns>The result returned by <paramref name="operation"/> on a successful attempt.</returns>
     public static async Task<T> ExecuteWithRetryAsync<T>(
         Func<CancellationToken, Task<T>> operation,
-        int maxAttempts = 3,
-        int initialDelayMs = 200,
+        RetryPolicy? policy = null,
         CancellationToken ct = default)
     {
+        var p = policy ?? RetryPolicy.Default;
+
         for (var attempt = 1; ; attempt++)
         {
             try
             {
                 return await operation(ct);
             }
-            catch (HttpRequestException) when (attempt < maxAttempts)
+            catch (HttpRequestException) when (attempt < p.MaxAttempts)
             {
                 // Transient network/transport failure — retry after exponential backoff.
             }
-            catch (TaskCanceledException) when (!ct.IsCancellationRequested && attempt < maxAttempts)
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested && attempt < p.MaxAttempts)
             {
                 // HttpClient request timeout (not an explicit user cancellation) — retry after backoff.
             }
 
-            // Exponential backoff: 200 ms, 400 ms, 800 ms, …
-            var delayMs = initialDelayMs * (1 << (attempt - 1));
+            // Exponential backoff: initialDelayMs → 2× → 4× …
+            var delayMs = p.InitialDelayMs * (1 << (attempt - 1));
             await Task.Delay(delayMs, ct);
         }
     }

@@ -18,6 +18,9 @@ the request lifecycle, the write path (commands), and the read path (queries).
 | Domain entities | App/Schema/Content logic | `backend/src/Squidex.Domain.Apps.Entities/` |
 | App domain object | App aggregate root | `backend/src/Squidex.Domain.Apps.Entities/Apps/DomainObject/AppDomainObject.cs` |
 | App provider | App read-model lookup | `backend/src/Squidex.Domain.Apps.Entities/AppProvider.cs` |
+| App templates | Template provisioning | `backend/src/Squidex.Domain.Apps.Entities/Apps/Templates/` |
+| Templates retry | Transient-fault retry helper | `backend/src/Squidex.Domain.Apps.Entities/Apps/Templates/HttpRetryHelper.cs` |
+| Retry policy | Retry config value object | `backend/src/Squidex.Domain.Apps.Entities/Apps/Templates/RetryPolicy.cs` |
 | Domain model | Pure value types & rules | `backend/src/Squidex.Domain.Apps.Core.Model/` |
 | Languages model | Language config type | `backend/src/Squidex.Domain.Apps.Core.Model/Apps/LanguagesConfig.cs` |
 | Domain operations | Cross-cutting logic | `backend/src/Squidex.Domain.Apps.Core.Operations/` |
