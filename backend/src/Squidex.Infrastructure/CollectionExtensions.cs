@@ -103,7 +103,10 @@ public static class CollectionExtensions
 
     public static bool SetEquals<T>(this IReadOnlyCollection<T> source, IReadOnlyCollection<T> other)
     {
-        return source.Count == other.Count && source.Intersect(other).Count() == other.Count;
+        // Build one HashSet from source and use IsSupersetOf, which short-circuits
+        // on the first miss. Avoids materialising the intersection as an
+        // enumerable before counting it (the previous Intersect().Count() pattern).
+        return source.Count == other.Count && new HashSet<T>(source).IsSupersetOf(other);
     }
 
     public static IEnumerable<List<T>> Batch<T>(this IEnumerable<T> source, int size)
@@ -153,7 +156,7 @@ public static class CollectionExtensions
 
     public static bool SetEquals<T>(this IReadOnlyCollection<T> source, IReadOnlyCollection<T> other, IEqualityComparer<T> comparer)
     {
-        return source.Count == other.Count && source.Intersect(other, comparer).Count() == other.Count;
+        return source.Count == other.Count && new HashSet<T>(source, comparer).IsSupersetOf(other);
     }
 
     public static IEnumerable<T> Reverse<T>(this IEnumerable<T> source, bool reverse)
@@ -163,7 +166,19 @@ public static class CollectionExtensions
 
     public static IEnumerable<T> Duplicates<T>(this IEnumerable<T> input)
     {
-        return input.GroupBy(x => x).Where(x => x.Count() > 1).Select(x => x.Key);
+        // Single-pass HashSet approach: avoids GroupBy's Dictionary<K,List<V>>
+        // allocation and the per-group Count() re-iteration. Yields each
+        // duplicate key exactly once and supports early exit by callers.
+        var seen = new HashSet<T>();
+        var reported = new HashSet<T>();
+
+        foreach (var item in input)
+        {
+            if (!seen.Add(item) && reported.Add(item))
+            {
+                yield return item;
+            }
+        }
     }
 
     public static int IndexOf<T>(this IEnumerable<T> input, Func<T, bool> predicate)
@@ -184,7 +199,18 @@ public static class CollectionExtensions
 
     public static IEnumerable<TResult> Duplicates<TResult, T>(this IEnumerable<T> input, Func<T, TResult> selector)
     {
-        return input.GroupBy(selector).Where(x => x.Count() > 1).Select(x => x.Key);
+        var seen = new HashSet<TResult>();
+        var reported = new HashSet<TResult>();
+
+        foreach (var item in input)
+        {
+            var key = selector(item);
+
+            if (!seen.Add(key) && reported.Add(key))
+            {
+                yield return key;
+            }
+        }
     }
 
     public static void AddRange<T>(this ICollection<T> target, IEnumerable<T> source)
