@@ -11,6 +11,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Squidex.Domain.Apps.Entities.Apps.DomainObject;
+using Squidex.Domain.Apps.Entities.Rules;
 using Squidex.Infrastructure;
 
 namespace Squidex.Config.Domain;
@@ -85,6 +86,7 @@ public static class TelemetryServices
             builder.AddHttpClientInstrumentation();
             builder.AddRuntimeInstrumentation();
             builder.AddMeter(AppMetrics.MeterName);
+            builder.AddMeter(RuleMetrics.MeterName);
 
             foreach (var configurator in serviceProvider.GetRequiredService<IEnumerable<ITelemetryConfigurator>>())
             {

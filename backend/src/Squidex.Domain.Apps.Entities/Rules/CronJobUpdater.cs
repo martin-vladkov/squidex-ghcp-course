@@ -6,6 +6,7 @@
 // ==========================================================================
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Domain.Apps.Core.Rules.Triggers;
 using Squidex.Domain.Apps.Events.Rules;
@@ -21,9 +22,11 @@ public sealed class CronJobUpdater(
     IAppProvider appProvider,
     ICronJobManager<CronJobContext> cronJobs,
     IRuleEnqueuer ruleEnqueuer,
+    IOptions<RulesOptions> options,
     ILogger<CronJobUpdater> log)
     : IEventConsumer, IInitializable
 {
+    private readonly bool cronJobTriggerEnabled = options.Value.EnableCronJobTrigger;
     public StreamFilter EventsFilter => StreamFilter.Prefix("rule-");
 
     public Task InitializeAsync(
@@ -37,6 +40,13 @@ public sealed class CronJobUpdater(
         CancellationToken ct)
     {
         var (appId, ruleId) = job.Context;
+
+        if (!cronJobTriggerEnabled)
+        {
+            LogMessages.LogCronJobTriggerDisabled(log, ruleId, appId.Id);
+            RuleMetrics.CronJobTriggerSkipped.Add(1);
+            return;
+        }
 
         var rule = await appProvider.GetRuleAsync(appId.Id, ruleId, ct);
 

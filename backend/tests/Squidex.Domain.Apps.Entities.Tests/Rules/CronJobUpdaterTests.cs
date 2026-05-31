@@ -6,6 +6,7 @@
 // ==========================================================================
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Domain.Apps.Core.Rules.Triggers;
 using Squidex.Domain.Apps.Entities.TestHelpers;
@@ -26,7 +27,8 @@ public sealed class CronJobUpdaterTests : GivenContext
 
     public CronJobUpdaterTests()
     {
-        sut = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer, log);
+        sut = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer,
+            Options.Create(new RulesOptions()), log);
     }
 
     [Fact]
@@ -219,5 +221,67 @@ public sealed class CronJobUpdaterTests : GivenContext
 
         A.CallTo(ruleEnqueuer)
             .MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task Should_skip_enqueue_when_cron_trigger_flag_is_disabled()
+    {
+        // Feature flag OFF — enqueuer must never be called.
+        var sutFlagOff = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer,
+            Options.Create(new RulesOptions { EnableCronJobTrigger = false }), log);
+
+        var rule = CreateAndSetupRule(new CronJobTrigger());
+
+        var job = new CronJob<CronJobContext>
+        {
+            Id = rule.Id.ToString(),
+            CronExpression = "* */5 * * *",
+            CronTimezone = "Europe/Berlin",
+            Context = new CronJobContext(AppId, rule.Id),
+        };
+
+        A.CallTo(() => log.IsEnabled(LogLevel.Warning)).Returns(true);
+
+        await sutFlagOff.HandleCronJobAsync(job, CancellationToken);
+
+        A.CallTo(ruleEnqueuer).MustNotHaveHappened();
+    }
+
+    [Fact]
+    public async Task Should_increment_counter_when_cron_trigger_flag_is_disabled()
+    {
+        // OTel metric contract test: RuleMetrics.CronJobTriggerSkipped must
+        // record exactly one measurement when EnableCronJobTrigger is false.
+        var measurements = new List<long>();
+
+        using var listener = new System.Diagnostics.Metrics.MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == RuleMetrics.MeterName &&
+                instrument.Name == "squidex.rules.cronjob_trigger_skipped")
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => measurements.Add(value));
+        listener.Start();
+
+        var sutFlagOff = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer,
+            Options.Create(new RulesOptions { EnableCronJobTrigger = false }), log);
+
+        var rule = CreateAndSetupRule(new CronJobTrigger());
+
+        var job = new CronJob<CronJobContext>
+        {
+            Id = rule.Id.ToString(),
+            CronExpression = "* */5 * * *",
+            CronTimezone = "Europe/Berlin",
+            Context = new CronJobContext(AppId, rule.Id),
+        };
+
+        await sutFlagOff.HandleCronJobAsync(job, CancellationToken);
+
+        Assert.Single(measurements);
+        Assert.Equal(1L, measurements[0]);
     }
 }
