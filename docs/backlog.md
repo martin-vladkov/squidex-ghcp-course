@@ -152,3 +152,234 @@ based tests would catch edge cases that unit tests miss.
 | 3 | BACK-1 (Prometheus exporter) | S | Low | Medium — enables production visibility |
 | 4 | BACK-2 (extend domain-op metric) | M | Low | Medium — broader observability |
 | 5 | BACK-5 (property-based tests) | M | Low | Medium — robustness for edge cases |
+
+---
+
+# Run Backlog — Rules Subsystem Reliability Epic
+
+Items identified during Run Ex12 analysis of `backend/src/Squidex.Domain.Apps.Entities/Rules/`.
+Each item is scoped to one PR. Acceptance criteria are testable bullet points.
+Tracker disabled — items committed here per Ex12 fallback guidance.
+
+---
+
+## BACK-6 — CronJobUpdater: add error handling in `HandleCronJobAsync`
+
+**Background**
+`HandleCronJobAsync` has no `try/catch`. If `appProvider.GetRuleAsync` or
+`ruleEnqueuer.EnqueueAsync` throws a transient exception (DB timeout, bus
+unavailable), the exception propagates unhandled to the cron scheduler. The
+cron trigger is silently lost with no log entry and no retry opportunity.
+
+**Code path**
+`backend/src/Squidex.Domain.Apps.Entities/Rules/CronJobUpdater.cs` — method
+`HandleCronJobAsync` (lines 38–55)
+
+**Acceptance criteria**
+- [ ] `HandleCronJobAsync` wraps its body in `try/catch(Exception ex)`
+- [ ] On exception: call a new `LogMessages.LogFailedToHandleCronJob` (`Error`,
+  with `ruleId`, `appId.Id`, and `exception` parameters)
+- [ ] Exception is caught and not re-thrown (cron scheduler keeps running)
+- [ ] New unit test: mock `GetRuleAsync` to throw; assert no exception escapes
+  and the logger received exactly one Error-level call
+- [ ] Existing tests still pass (`CronJobUpdaterTests` 11/11)
+
+**Pattern to follow**
+`backend/src/Squidex.Domain.Apps.Entities/Rules/Runner/RuleRunnerJob.cs` —
+`LogMessages.LogFailedToRunRule` call in the catch block
+
+**Priority / effort / good first task**
+Medium priority · Small (~30 min) · ✅ Good first task
+
+---
+
+## BACK-7 — RuleEnqueuer: evict rule cache on `RuleDeleted` / `RuleUpdated`
+
+**Background**
+`GetRulesAsync` caches app rules in `IMemoryCache` for `RulesCacheDuration`
+(default ~10 s). `RuleEnqueuer.On()` processes `IEventConsumer` events but
+handles no `RuleDeleted` or `RuleUpdated` events. After a rule is deleted or
+changed, up to 10 s of incoming events can still match the stale cached copy,
+creating ghost rule-job entries.
+
+**Code path**
+`backend/src/Squidex.Domain.Apps.Entities/Rules/RuleEnqueuer.cs` — `GetRulesAsync`
+(lines 118–134), `On(IEnumerable<Envelope<IEvent>>)` (line 76)
+
+**Acceptance criteria**
+- [ ] `On()` handles `RuleDeleted` by calling `cache.Remove(cacheKey)` for the
+  affected app
+- [ ] `On()` handles `RuleUpdated` by calling `cache.Remove(cacheKey)` for the
+  affected app
+- [ ] Unit tests: send `RuleDeleted`/`RuleUpdated` envelopes; assert the cache
+  key is evicted (use a mock or real `IMemoryCache`)
+- [ ] Existing `RuleEnqueuerTests` still pass
+
+**Priority / effort / good first task**
+Medium priority · Small (~45 min) · ✅ Good first task
+
+---
+
+## BACK-8 — RuleFlowTrackingCallback: distinguish Cancelled/Timeout from failure
+
+**Background**
+`OnUpdateAsync` tracks any non-`Completed` status as a failure
+(`totalFailed += 1`). If `FlowExecutionStatus` has additional values (e.g.,
+`Cancelled`, `Running`, `Pending`), they incorrectly inflate the failure
+counter in `IRuleUsageTracker`. The `RuleCounters` struct only has
+`TotalSucceeded` and `TotalFailed` — a `TotalCancelled` field may be needed.
+
+**Code paths**
+- `backend/src/Squidex.Domain.Apps.Entities/Rules/RuleFlowTrackingCallback.cs`
+  line 23 — binary `Completed` / else branch
+- `backend/src/Squidex.Domain.Apps.Entities/Rules/IRuleUsageTracker.cs`
+  line 35 — `RuleCounters` struct
+
+**Acceptance criteria**
+- [ ] Enumerate all `FlowExecutionStatus` values from the Squidex.Flows package
+- [ ] `OnUpdateAsync` handles each known status explicitly (no implicit fallthrough)
+- [ ] If a `Cancelled` state exists, neither `totalSucceeded` nor `totalFailed`
+  is incremented for it (or a new `TotalCancelled` counter is added)
+- [ ] Unit tests cover all enum variants
+- [ ] Existing tests still pass
+
+**Priority / effort**
+Low priority · Medium (~1 h) · Requires Squidex.Flows package inspection first
+
+---
+
+## BACK-9 — RuleCommandMiddleware: log rule mutations for audit trail
+
+**Background**
+Rule create/update/delete/enable/disable commands pass through
+`RuleCommandMiddleware.EnrichResultAsync` with no log output. There is no
+way to audit who changed a rule, when, or what the result was from application
+logs. This makes post-incident investigation difficult.
+
+**Code path**
+`backend/src/Squidex.Domain.Apps.Entities/Rules/RuleCommandMiddleware.cs` —
+`EnrichResultAsync` (lines 20–31)
+
+**Acceptance criteria**
+- [ ] Add `ILogger<RuleCommandMiddleware>` constructor parameter
+- [ ] Add `LogMessages.LogRuleMutated` (`Information`, parameters: `ruleId`,
+  `commandType` string) called after enrichment succeeds
+- [ ] Unit test: execute a `CreateRule` command through the middleware and assert
+  the Information log is emitted
+- [ ] Follows `[LoggerMessage]` source-generator pattern (no string interpolation)
+- [ ] Existing tests still pass
+
+**Priority / effort / good first task**
+Low priority · Small (~20 min) · ✅ Good first task — follows established Ex9 pattern exactly
+
+---
+
+## BACK-10 — RuleQueueWriter: log batch job count on flush
+
+**Background**
+`FlushCoreAsync` in `RuleQueueWriter` writes batches of flow jobs to
+`IFlowManager` but logs no count information. Operators cannot tell from logs
+how many jobs were queued per batch or per event-consumer cycle. The existing
+`LogMessages.LogAddingRuleJob` fires per individual job but carries no batch
+aggregate.
+
+**Code path**
+`backend/src/Squidex.Domain.Apps.Entities/Rules/RuleQueueWriter.cs` —
+`FlushCoreAsync` (lines 76+)
+
+**Acceptance criteria**
+- [ ] After `FlushCoreAsync` completes, log one `Information` message with the
+  count of jobs written in that flush using `[LoggerMessage]`
+- [ ] Log is suppressed (no-op) when count is 0 to avoid log noise on quiet
+  event streams
+- [ ] Unit test: write 3 jobs and flush; assert logger received exactly one
+  batch-count log with value 3
+- [ ] Existing `RuleQueueWriterTests` still pass
+
+**Priority / effort / good first task**
+Low priority · Small (~20 min) · ✅ Good first task
+
+---
+
+## Run backlog priority order
+
+| # | Item | Effort | Risk | Value |
+|---|------|--------|------|-------|
+| 1 | BACK-6 (CronJob error handling) | S | Low | High — prevents silent trigger loss |
+| 2 | BACK-7 (cache eviction on delete) | S | Low | Medium — prevents ghost rule-jobs |
+| 3 | BACK-9 (mutation audit log) | XS | Low | Medium — enables post-incident audit |
+| 4 | BACK-10 (batch count log) | XS | Low | Low — operational visibility |
+| 5 | BACK-8 (status enum coverage) | M | Low | Low — correctness improvement |
+
+## Delegation — BACK-6 simulated patch plan
+
+Item BACK-6 is the highest-priority good-first-task. Below is the agent-ready
+patch plan a developer (or AI agent) would follow to complete it.
+
+### Patch plan
+
+**Branch**: `fix/cron-job-error-handling`  
+**Base**: `main` (or current sprint branch)
+
+**Step 1** — Add log message to `LogMessages.cs`
+
+```csharp
+[LoggerMessage(Level = LogLevel.Error,
+    Message = "Failed to handle cron job for rule '{ruleId}' in app '{appId}'.")]
+public static partial void LogFailedToHandleCronJob(
+    ILogger logger, DomainId ruleId, DomainId appId, Exception exception);
+```
+
+**Step 2** — Wrap `HandleCronJobAsync` body in `CronJobUpdater.cs`
+
+```csharp
+public async Task HandleCronJobAsync(CronJob<CronJobContext> job, CancellationToken ct)
+{
+    var (appId, ruleId) = job.Context;
+    try
+    {
+        var rule = await appProvider.GetRuleAsync(appId.Id, ruleId, ct);
+        if (rule == null || rule.Trigger is not CronJobTrigger cronJob)
+        {
+            LogMessages.LogCronJobSkipped(log, ruleId, appId.Id);
+            return;
+        }
+        LogMessages.LogCronJobTriggered(log, ruleId, appId.Id);
+        var @event = new RuleCronJobTriggered { AppId = appId, RuleId = ruleId, Value = cronJob.Value };
+        await ruleEnqueuer.EnqueueAsync(rule, Envelope.Create(@event), ct);
+    }
+    catch (Exception ex)
+    {
+        LogMessages.LogFailedToHandleCronJob(log, ruleId, appId.Id, ex);
+    }
+}
+```
+
+**Step 3** — Add test to `CronJobUpdaterTests.cs`
+
+```csharp
+[Fact]
+public async Task Should_log_error_and_not_rethrow_when_rule_provider_throws()
+{
+    A.CallTo(() => AppProvider.GetRuleAsync(AppId.Id, A<DomainId>._, A<CancellationToken>._))
+        .Throws(new InvalidOperationException("transient"));
+    A.CallTo(() => log.IsEnabled(LogLevel.Error)).Returns(true);
+
+    var job = new CronJob<CronJobContext>
+    {
+        Id = DomainId.NewGuid().ToString(),
+        Context = new CronJobContext(AppId, DomainId.NewGuid()),
+    };
+
+    // Must not throw
+    await sut.HandleCronJobAsync(job, CancellationToken);
+
+    A.CallTo(log)
+        .Where(x => x.Method.Name == "Log" && x.GetArgument<LogLevel>(0) == LogLevel.Error)
+        .MustHaveHappenedOnceExactly();
+}
+```
+
+**Estimated diff**: +15 lines production code, +25 lines test code.  
+**Verification**: `dotnet test --filter CronJobUpdater` → all tests pass.
+
