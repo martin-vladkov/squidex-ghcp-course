@@ -34,7 +34,6 @@
     <PackageReference Include="GraphQL" Version="8.8.4" />
     <PackageReference Include="GraphQL.MicrosoftDI" Version="8.8.4" />
     <PackageReference Include="GraphQL.SystemTextJson" Version="8.8.4" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.13.1" />
     <PackageReference Include="Meziantou.Analyzer" Version="3.0.50">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -82,7 +81,7 @@
 
   <ItemGroup Condition="'$(IncludeMagick)' == 'true'">
     <PackageReference Include="Squidex.Assets.ImageMagick" Version="8.0.1" />
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.12.0" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.13.1" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(IncludeKafka)' == 'true'">

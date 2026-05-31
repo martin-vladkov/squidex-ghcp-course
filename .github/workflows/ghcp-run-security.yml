@@ -60,10 +60,17 @@ jobs:
         # dotnet list package --vulnerable exits 0 even when vulnerabilities are
         # found; we grep the output and fail the step explicitly if any HIGH or
         # CRITICAL CVE is present so the job is marked failed in GitHub Actions.
+        #
+        # The `|| true` is intentional: the command exits non-zero when a
+        # conditional PackageReference (e.g. IncludeMagick) was not included in
+        # the restore, producing "Unable to read package reference" on stderr.
+        # That is a known informational message, not a scan failure; we capture
+        # it in OUTPUT so it is still visible in the log and continue to the
+        # grep check below.
         run: |
-          OUTPUT=$(dotnet list backend/Squidex.slnx package --vulnerable 2>&1)
+          OUTPUT=$(dotnet list backend/Squidex.slnx package --vulnerable 2>&1 || true)
           echo "$OUTPUT"
-          if echo "$OUTPUT" | grep -qE "NU1903|Critical severity|High severity"; then
+          if echo "$OUTPUT" | grep -qE "NU1903|NU1904"; then
             echo "::error::One or more HIGH/CRITICAL vulnerable packages detected. See output above."
             exit 1
           fi
