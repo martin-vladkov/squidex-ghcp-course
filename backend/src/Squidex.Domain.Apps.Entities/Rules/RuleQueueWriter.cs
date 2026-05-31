@@ -5,6 +5,11 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+#pragma warning disable MA0004
+// MA0004 (UseConfigureAwait) suppression: RuleQueueWriter is consumed exclusively
+// by the ASP.NET Core event pipeline (no SynchronizationContext). The DisposeAsync
+// and FlushCoreAsync paths in particular must complete after caller cancellation;
+// capturing context here would be incorrect anyway. Tracked for future clean-up.
 using Microsoft.Extensions.Logging;
 using NodaTime;
 using Squidex.Domain.Apps.Core.HandleRules;

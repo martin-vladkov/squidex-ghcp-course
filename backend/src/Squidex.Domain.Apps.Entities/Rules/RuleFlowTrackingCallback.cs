@@ -22,12 +22,12 @@ public sealed class RuleFlowTrackingCallback(IRuleUsageTracker ruleUsageTracker,
     {
         if (state.Status == FlowExecutionStatus.Completed)
         {
-            await TrackAsync(state, 1, 0, ct);
+            await TrackAsync(state, 1, 0, ct).ConfigureAwait(false);
         }
         else
         {
             LogMessages.LogFlowExecutionFailed(log, state.DefinitionId, state.OwnerId);
-            await TrackAsync(state, 0, 1, ct);
+            await TrackAsync(state, 0, 1, ct).ConfigureAwait(false);
         }
     }
 
@@ -46,6 +46,6 @@ public sealed class RuleFlowTrackingCallback(IRuleUsageTracker ruleUsageTracker,
             0,
             totalSucceeded,
             totalFailed,
-            ct);
+            ct).ConfigureAwait(false);
     }
 }

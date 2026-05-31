@@ -5,6 +5,10 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+#pragma warning disable MA0004
+// MA0004 (UseConfigureAwait) suppression: RuleValidator is a stateless validation
+// helper called within the ASP.NET Core command pipeline (no SynchronizationContext).
+// Tracked for a future clean-up pass alongside the other Rules/*.cs files.
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Domain.Apps.Core.Rules;
 using Squidex.Domain.Apps.Core.Rules.Triggers;

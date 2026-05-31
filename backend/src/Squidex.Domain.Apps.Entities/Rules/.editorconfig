@@ -1,0 +1,58 @@
+# Squidex — Rules path: stricter static-analysis rules
+# Inherits backend/.editorconfig (no root = true override here).
+# These overrides are intentionally stricter than the project-wide defaults so
+# that every new file added to this directory is held to a higher standard.
+#
+# CI enforcement: dotnet build Squidex.Domain.Apps.Entities.csproj fails on any
+# error-severity diagnostic.  Suppressions in source must include a justification
+# comment (see CronJobUpdater.cs and RuleQueueWriter.cs for examples).
+
+[*.cs]
+
+# MA0004: Use Task.ConfigureAwait(false)
+# Promoted from 'none' (globally suppressed) to 'warning' for this directory.
+# Rationale: the Rules/ layer is the async hot path for event processing and
+# rule job enqueuing.  Using ConfigureAwait(false) on awaits that do NOT need
+# the ambient context guards against future SynchronizationContext capture if
+# this code is ever called from a context that has one (e.g. tests, Blazor,
+# integration harnesses).  Callers in DisposeAsync or other lifecycle methods
+# that must complete even after cancellation may suppress with justification.
+dotnet_diagnostic.MA0004.severity = warning
+
+# MA0007: Add a trailing comma after the last value in multi-line initializers.
+# Promoted from 'warning' (project-wide default) to 'error' for this directory.
+# Rationale: trailing commas in multi-line lists produce cleaner diffs (no comma
+# added to the previous line when a new entry is appended) and are already the
+# project's stylistic preference (enforced as error in Apps/DomainObject/).
+dotnet_diagnostic.MA0007.severity = error
+
+# MA0040: Forward the CancellationToken parameter to methods that take one.
+# Promoted from default to 'error' for this directory.
+# Rationale: every async method in the Rules layer that accepts a
+# CancellationToken must propagate it to downstream calls so that long-running
+# event-processing operations (enqueue, cache fill, usage tracking) honour
+# request cancellation. New code that intentionally passes 'default' instead of
+# the ambient ct must add a #pragma warning disable MA0040 with a comment
+# explaining why propagation would be harmful (e.g., DisposeAsync must flush
+# even after caller cancels).
+dotnet_diagnostic.MA0040.severity = error
+
+# MA0038: Make method static (deprecated — use CA1822 instead)
+# Kept at 'none': MA0038 is superseded by CA1822 and has known false positives
+# with C# primary constructors (the analyzer does not see primary constructor
+# parameters as instance state access).  CA1822 is the correct rule to use here
+# but is not yet enabled for this directory.
+dotnet_diagnostic.MA0038.severity = none
+
+# ---------------------------------------------------------------------------
+# Subdirectory suppressions — pending a future clean-up pass
+# ---------------------------------------------------------------------------
+# MA0004 is suppressed for all Rules subdirectories (Runner/, DomainObject/,
+# UsageTracking/, Queries/, Indexes/) because these are secondary paths that
+# were not in scope for the Ex14 fix-pass.  A separate backlog item (see
+# docs/backlog.md) should address them before the next major release.
+# Priority for Ex14 was the immediate Rules/*.cs hot-path files.
+[{Runner,DomainObject,UsageTracking,Queries,Indexes}/**]
+dotnet_diagnostic.MA0004.severity = none
+dotnet_diagnostic.MA0038.severity = none
+

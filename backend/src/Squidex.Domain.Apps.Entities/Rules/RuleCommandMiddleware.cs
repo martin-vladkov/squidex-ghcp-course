@@ -21,11 +21,11 @@ public sealed class RuleCommandMiddleware(
     protected override async Task<object> EnrichResultAsync(CommandContext context, CommandResult result,
         CancellationToken ct)
     {
-        var payload = await base.EnrichResultAsync(context, result, ct);
+        var payload = await base.EnrichResultAsync(context, result, ct).ConfigureAwait(false);
 
         if (payload is Rule rule and not EnrichedRule)
         {
-            payload = await ruleEnricher.EnrichAsync(rule, contextProvider.Context, ct);
+            payload = await ruleEnricher.EnrichAsync(rule, contextProvider.Context, ct).ConfigureAwait(false);
         }
 
         return payload;
