@@ -1,0 +1,76 @@
+name: Run – Secret Scanning (gitleaks)
+
+# Runs on every push / PR targeting a run-* branch to detect accidental
+# credential commits.  Mirrors the walk-** scanning workflow; all findings
+# are false-positives triaged in .gitleaks.toml — any new finding must either
+# be rotated or documented there before the scan can pass.
+#
+# Security improvement (Run Ex8): gitleaks was previously only configured for
+# walk-** branches, leaving the run-** exercise branches without automated
+# secret scanning.  This workflow closes that coverage gap.
+
+on:
+  push:
+    branches:
+      - run-**
+  pull_request:
+    branches:
+      - run-**
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: Scan for secrets (gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so gitleaks can scan git log too
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Use our project-level config — allowlist entries are documented
+          # in .gitleaks.toml with per-entry justification comments.
+          config-path: .gitleaks.toml
+
+  vulnerability-scan:
+    name: Scan for vulnerable NuGet packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore solution
+        run: dotnet restore backend/Squidex.slnx --verbosity quiet
+
+      - name: Check for vulnerable packages
+        # dotnet list package --vulnerable exits 0 even when vulnerabilities are
+        # found; we grep the output and fail the step explicitly if any HIGH or
+        # CRITICAL CVE is present so the job is marked failed in GitHub Actions.
+        #
+        # The `|| true` is intentional: the command exits non-zero when a
+        # conditional PackageReference (e.g. IncludeMagick) was not included in
+        # the restore, producing "Unable to read package reference" on stderr.
+        # That is a known informational message, not a scan failure; we capture
+        # it in OUTPUT so it is still visible in the log and continue to the
+        # grep check below.
+        run: |
+          OUTPUT=$(dotnet list backend/Squidex.slnx package --vulnerable 2>&1 || true)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -qE "NU1903|NU1904"; then
+            echo "::error::One or more HIGH/CRITICAL vulnerable packages detected. See output above."
+            exit 1
+          fi
