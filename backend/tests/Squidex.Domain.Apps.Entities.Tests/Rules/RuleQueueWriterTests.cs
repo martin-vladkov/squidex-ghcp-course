@@ -5,12 +5,14 @@
 //  All rights reserved. Licensed under the MIT license.
 // ==========================================================================
 
+using Microsoft.Extensions.Options;
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Domain.Apps.Core.Rules.EnrichedEvents;
 using Squidex.Domain.Apps.Entities.TestHelpers;
 using Squidex.Flows;
 using Squidex.Flows.Internal;
 using Squidex.Flows.Internal.Execution;
+using Squidex.Infrastructure;
 
 namespace Squidex.Domain.Apps.Entities.Rules;
 
@@ -176,5 +178,103 @@ public class RuleQueueWriterTests : GivenContext
         await sut.FlushAsync();
 
         return writes;
+    }
+
+    // ── resilience tests ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Should_retry_usage_tracking_on_IOException_and_succeed()
+    {
+        // Zero-delay options so the test does not wait for the backoff timer.
+        var fastOptions = Options.Create(new RulesOptions { ResilienceMaxAttempts = 3, ResilienceInitialDelayMs = 0 });
+        var sutFast = new RuleQueueWriter(flowManager, ruleUsageTracker, null, fastOptions);
+
+        var calls = 0;
+
+        // First TrackAsync call throws; second succeeds.
+        A.CallTo(() => ruleUsageTracker.TrackAsync(
+                A<DomainId>._,
+                A<DomainId>._,
+                A<DateOnly>._,
+                A<int>._,
+                A<int>._,
+                A<int>._,
+                A<CancellationToken>._))
+            .Invokes(_ => calls++)
+            .ReturnsLazily(() =>
+            {
+                if (calls <= 1)
+                {
+                    throw new IOException("simulated transient I/O failure");
+                }
+
+                return Task.CompletedTask;
+            });
+
+        var result = new JobResult
+        {
+            SkipReason = SkipReason.None,
+            EnrichedEvent = null,
+            EnrichmentError = null,
+            Job = new CreateFlowInstanceRequest<FlowEventContext>
+            {
+                Context = new FlowEventContext(),
+                Definition = new FlowDefinition(),
+                DefinitionId = Guid.NewGuid().ToString(),
+                OwnerId = Guid.NewGuid().ToString(),
+            },
+            Rule = CreateRule(),
+        };
+
+        await sutFast.WriteAsync(AppId.Id, result);
+
+        // Two calls: one transient failure + one successful retry.
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task Should_not_retry_usage_tracking_for_non_transient_exception()
+    {
+        var fastOptions = Options.Create(new RulesOptions { ResilienceMaxAttempts = 3, ResilienceInitialDelayMs = 0 });
+        var sutFast = new RuleQueueWriter(flowManager, ruleUsageTracker, null, fastOptions);
+
+        A.CallTo(() => ruleUsageTracker.TrackAsync(
+                A<DomainId>._,
+                A<DomainId>._,
+                A<DateOnly>._,
+                A<int>._,
+                A<int>._,
+                A<int>._,
+                A<CancellationToken>._))
+            .Throws<InvalidOperationException>();
+
+        var result = new JobResult
+        {
+            SkipReason = SkipReason.None,
+            EnrichedEvent = null,
+            EnrichmentError = null,
+            Job = new CreateFlowInstanceRequest<FlowEventContext>
+            {
+                Context = new FlowEventContext(),
+                Definition = new FlowDefinition(),
+                DefinitionId = Guid.NewGuid().ToString(),
+                OwnerId = Guid.NewGuid().ToString(),
+            },
+            Rule = CreateRule(),
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sutFast.WriteAsync(AppId.Id, result));
+
+        // Non-transient exception — must NOT retry: exactly one attempt.
+        A.CallTo(() => ruleUsageTracker.TrackAsync(
+                A<DomainId>._,
+                A<DomainId>._,
+                A<DateOnly>._,
+                A<int>._,
+                A<int>._,
+                A<int>._,
+                A<CancellationToken>._))
+            .MustHaveHappenedOnceExactly();
     }
 }

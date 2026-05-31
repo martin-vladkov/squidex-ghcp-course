@@ -11,6 +11,7 @@
 // and FlushCoreAsync paths in particular must complete after caller cancellation;
 // capturing context here would be incorrect anyway. Tracked for future clean-up.
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NodaTime;
 using Squidex.Domain.Apps.Core.HandleRules;
 using Squidex.Flows;
@@ -19,9 +20,11 @@ using Squidex.Infrastructure;
 
 namespace Squidex.Domain.Apps.Entities.Rules;
 
-public sealed class RuleQueueWriter(IFlowManager<FlowEventContext> flowManager, IRuleUsageTracker ruleUsageTracker, ILogger? log)
+public sealed class RuleQueueWriter(IFlowManager<FlowEventContext> flowManager, IRuleUsageTracker ruleUsageTracker, ILogger? log, IOptions<RulesOptions>? options = null)
     : IAsyncDisposable
 {
+    private readonly int resilienceMaxAttempts = options?.Value.ResilienceMaxAttempts ?? 3;
+    private readonly int resilienceInitialDelayMs = options?.Value.ResilienceInitialDelayMs ?? 200;
     private readonly List<CreateFlowInstanceRequest<FlowEventContext>> writes = [];
 
     public IClock Clock { get; set; } = SystemClock.Instance;
@@ -48,7 +51,10 @@ public sealed class RuleQueueWriter(IFlowManager<FlowEventContext> flowManager, 
         var today = Clock.GetCurrentInstant().ToDateOnly();
 
         // Unfortunately we cannot write in batches here, because the result could be from multiple rules.
-        await ruleUsageTracker.TrackAsync(appId, result.Rule.Id, today, 1, 0, 0);
+        await RulesResilienceHelper.ExecuteWithRetryAsync(
+            t => ruleUsageTracker.TrackAsync(appId, result.Rule.Id, today, 1, 0, 0, t),
+            maxAttempts: resilienceMaxAttempts,
+            initialDelayMs: resilienceInitialDelayMs);
 
         if (writes.Count >= 100)
         {

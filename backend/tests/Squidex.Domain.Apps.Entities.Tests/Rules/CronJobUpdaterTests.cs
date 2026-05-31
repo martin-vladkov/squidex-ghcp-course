@@ -284,4 +284,73 @@ public sealed class CronJobUpdaterTests : GivenContext
         Assert.Single(measurements);
         Assert.Equal(1L, measurements[0]);
     }
+
+    // ── resilience tests ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Should_retry_enqueue_on_IOException_and_succeed()
+    {
+        // Zero-delay options so the test does not wait for the backoff timer.
+        var sutFast = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer,
+            Options.Create(new RulesOptions { ResilienceMaxAttempts = 3, ResilienceInitialDelayMs = 0 }), log);
+
+        var rule = CreateAndSetupRule(new CronJobTrigger());
+        var calls = 0;
+
+        // First EnqueueAsync call throws; second succeeds.
+        A.CallTo(() => ruleEnqueuer.EnqueueAsync(rule, A<Envelope<IEvent>>._, A<CancellationToken>._))
+            .Invokes(_ => calls++)
+            .ReturnsLazily(() =>
+            {
+                if (calls <= 1)
+                {
+                    throw new IOException("simulated transient queue failure");
+                }
+
+                return Task.CompletedTask;
+            });
+
+        var job = new CronJob<CronJobContext>
+        {
+            Id = rule.Id.ToString(),
+            CronExpression = "* */5 * * *",
+            CronTimezone = "Europe/Berlin",
+            Context = new CronJobContext(AppId, rule.Id),
+        };
+
+        await sutFast.HandleCronJobAsync(job, CancellationToken);
+
+        // Two calls: one transient failure + one successful retry.
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task Should_not_retry_enqueue_when_token_is_cancelled()
+    {
+        var sutFast = new CronJobUpdater(AppProvider, cronJobs, ruleEnqueuer,
+            Options.Create(new RulesOptions { ResilienceMaxAttempts = 3, ResilienceInitialDelayMs = 0 }), log);
+
+        var rule = CreateAndSetupRule(new CronJobTrigger());
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        A.CallTo(() => ruleEnqueuer.EnqueueAsync(rule, A<Envelope<IEvent>>._, A<CancellationToken>._))
+            .Throws<OperationCanceledException>();
+
+        var job = new CronJob<CronJobContext>
+        {
+            Id = rule.Id.ToString(),
+            CronExpression = "* */5 * * *",
+            CronTimezone = "Europe/Berlin",
+            Context = new CronJobContext(AppId, rule.Id),
+        };
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            sutFast.HandleCronJobAsync(job, cts.Token));
+
+        // Explicit cancellation — must NOT retry.
+        A.CallTo(() => ruleEnqueuer.EnqueueAsync(rule, A<Envelope<IEvent>>._, cts.Token))
+            .MustHaveHappenedOnceExactly();
+    }
 }
